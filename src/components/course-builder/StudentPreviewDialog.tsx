@@ -1028,6 +1028,20 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
           const isCorrectPosition = submitted && !item.isDistractor && block.content?.correctOrder?.[displayIndex] === item.originalIndex;
           const isWrongPosition = submitted && !item.isDistractor && block.content?.correctOrder?.[displayIndex] !== item.originalIndex;
           const isDistractorRevealed = submitted && item.isDistractor;
+
+          const moveUp = () => {
+            if (displayIndex === 0) return;
+            const newOrder = [...userOrder];
+            [newOrder[displayIndex], newOrder[displayIndex - 1]] = [newOrder[displayIndex - 1], newOrder[displayIndex]];
+            setUserOrder(newOrder);
+          };
+          const moveDown = () => {
+            if (displayIndex === userOrder.length - 1) return;
+            const newOrder = [...userOrder];
+            [newOrder[displayIndex], newOrder[displayIndex + 1]] = [newOrder[displayIndex + 1], newOrder[displayIndex]];
+            setUserOrder(newOrder);
+          };
+
           return (
             <div
               key={itemIndex}
@@ -1047,6 +1061,19 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
               <span className="text-xs font-mono text-muted-foreground w-5 text-center">{displayIndex + 1}</span>
               <GripVertical className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm flex-1">{item.text}</span>
+              {/* Move buttons for touch/accessibility */}
+              {!submitted && (
+                <div className="flex flex-col gap-0.5">
+                  <button onClick={moveUp} disabled={displayIndex === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5">
+                    <ChevronLeft className="h-3 w-3 rotate-90" />
+                  </button>
+                  <button onClick={moveDown} disabled={displayIndex === userOrder.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5">
+                    <ChevronRight className="h-3 w-3 rotate-90" />
+                  </button>
+                </div>
+              )}
+              {submitted && isCorrectPosition && <CheckCircle2 className="h-4 w-4 text-success shrink-0" />}
+              {submitted && isWrongPosition && <X className="h-4 w-4 text-destructive shrink-0" />}
               {isDistractorRevealed && <span className="text-xs text-amber-600">Doesn't belong</span>}
             </div>
           );
