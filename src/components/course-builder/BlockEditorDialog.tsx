@@ -633,6 +633,24 @@ function MicroQuizEditor({ content, onChange }: { content: any; onChange: (c: an
             />
             <Label htmlFor="showCorrect">Show correct answer after attempt</Label>
           </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="showOneAtATime"
+              checked={content.showOneAtATime === true}
+              onCheckedChange={(checked) => onChange({ ...content, showOneAtATime: checked })}
+            />
+            <Label htmlFor="showOneAtATime">One question at a time</Label>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Time Limit (seconds, 0 = none)</Label>
+          <Input
+            type="number"
+            min={0}
+            value={content.timeLimit || ""}
+            onChange={(e) => onChange({ ...content, timeLimit: parseInt(e.target.value) || 0 })}
+            placeholder="e.g., 300"
+          />
         </div>
       </div>
 
