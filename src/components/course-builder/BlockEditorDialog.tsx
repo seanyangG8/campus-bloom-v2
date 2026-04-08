@@ -1366,6 +1366,262 @@ function QAThreadBlockEditor({ content, onChange }: { content: any; onChange: (c
   );
 }
 
+// --- Gap Fill Block Editor ---
+function GapFillBlockEditor({ content, onChange }: { content: any; onChange: (c: any) => void }) {
+  const sentences = content.sentences || [];
+  const generateId = () => `s-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
+  const addSentence = () => {
+    onChange({
+      ...content,
+      sentences: [...sentences, {
+        id: generateId(),
+        textWithBlanks: 'The answer is {{1}}.',
+        blanks: [{ id: generateId(), acceptedAnswers: [''] }],
+      }],
+    });
+  };
+
+  const updateSentence = (index: number, updates: any) => {
+    const updated = [...sentences];
+    updated[index] = { ...updated[index], ...updates };
+    onChange({ ...content, sentences: updated });
+  };
+
+  const removeSentence = (index: number) => {
+    onChange({ ...content, sentences: sentences.filter((_: any, i: number) => i !== index) });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Instruction</Label>
+        <Input value={content.instruction || ''} onChange={(e) => onChange({ ...content, instruction: e.target.value })} />
+      </div>
+      {sentences.map((sentence: any, si: number) => (
+        <div key={sentence.id} className="border rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Sentence {si + 1}</Label>
+            {sentences.length > 1 && (
+              <Button variant="ghost" size="sm" onClick={() => removeSentence(si)}><Trash2 className="h-4 w-4" /></Button>
+            )}
+          </div>
+          <Textarea
+            value={sentence.textWithBlanks}
+            onChange={(e) => updateSentence(si, { textWithBlanks: e.target.value })}
+            placeholder="Use {{1}}, {{2}} for blanks"
+          />
+          <div className="space-y-2">
+            <Label className="text-xs">Accepted answers per blank</Label>
+            {sentence.blanks?.map((blank: any, bi: number) => (
+              <div key={blank.id} className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-16">Blank {bi + 1}:</span>
+                <Input
+                  value={blank.acceptedAnswers?.join(', ') || ''}
+                  onChange={(e) => {
+                    const blanks = [...sentence.blanks];
+                    blanks[bi] = { ...blanks[bi], acceptedAnswers: e.target.value.split(',').map((a: string) => a.trim()) };
+                    updateSentence(si, { blanks });
+                  }}
+                  placeholder="answer1, answer2"
+                  className="flex-1"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <Button variant="outline" size="sm" onClick={addSentence} className="gap-2">
+        <Plus className="h-4 w-4" /> Add Sentence
+      </Button>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex items-center gap-2">
+          <Switch checked={content.showCorrectAfter !== false} onCheckedChange={(v) => onChange({ ...content, showCorrectAfter: v })} />
+          <Label className="text-sm">Show correct answers after</Label>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Scoring</Label>
+          <Select value={content.scoringMode || 'partial-credit'} onValueChange={(v) => onChange({ ...content, scoringMode: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all-or-nothing">All or nothing</SelectItem>
+              <SelectItem value="partial-credit">Partial credit</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Poll Block Editor ---
+function PollBlockEditor({ content, onChange }: { content: any; onChange: (c: any) => void }) {
+  const options = content.options || [];
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Question</Label>
+        <Input value={content.question || ''} onChange={(e) => onChange({ ...content, question: e.target.value })} />
+      </div>
+      <div className="space-y-2">
+        <Label>Options</Label>
+        {options.map((opt: string, i: number) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input
+              value={opt}
+              onChange={(e) => {
+                const updated = [...options];
+                updated[i] = e.target.value;
+                onChange({ ...content, options: updated });
+              }}
+              placeholder={`Option ${i + 1}`}
+            />
+            {options.length > 2 && (
+              <Button variant="ghost" size="sm" onClick={() => onChange({ ...content, options: options.filter((_: any, j: number) => j !== i) })}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        ))}
+        <Button variant="outline" size="sm" onClick={() => onChange({ ...content, options: [...options, ''] })} className="gap-2">
+          <Plus className="h-4 w-4" /> Add Option
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex items-center gap-2">
+          <Switch checked={content.allowMultiple || false} onCheckedChange={(v) => onChange({ ...content, allowMultiple: v })} />
+          <Label className="text-sm">Allow multiple</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch checked={content.showResults !== false} onCheckedChange={(v) => onChange({ ...content, showResults: v })} />
+          <Label className="text-sm">Show results</Label>
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Chart Type</Label>
+        <Select value={content.chartType || 'bar'} onValueChange={(v) => onChange({ ...content, chartType: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="bar">Bar Chart</SelectItem>
+            <SelectItem value="pie">Pie Chart</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+// --- Reveal Block Editor ---
+function RevealBlockEditor({ content, onChange }: { content: any; onChange: (c: any) => void }) {
+  const sections = content.sections || [];
+  const generateId = () => `r-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
+  const addSection = () => {
+    onChange({
+      ...content,
+      sections: [...sections, { id: generateId(), title: 'New Section', content: '<p>Content here...</p>' }],
+    });
+  };
+
+  const updateSection = (index: number, updates: any) => {
+    const updated = [...sections];
+    updated[index] = { ...updated[index], ...updates };
+    onChange({ ...content, sections: updated });
+  };
+
+  const removeSection = (index: number) => {
+    onChange({ ...content, sections: sections.filter((_: any, i: number) => i !== index) });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <Label className="text-xs">Style</Label>
+        <Select value={content.style || 'accordion'} onValueChange={(v) => onChange({ ...content, style: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="accordion">Accordion</SelectItem>
+            <SelectItem value="click-to-reveal">Click to Reveal</SelectItem>
+            <SelectItem value="tabs">Tabs</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {sections.map((section: any, i: number) => (
+        <div key={section.id} className="border rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Section {i + 1}</Label>
+            {sections.length > 1 && (
+              <Button variant="ghost" size="sm" onClick={() => removeSection(i)}><Trash2 className="h-4 w-4" /></Button>
+            )}
+          </div>
+          <Input value={section.title} onChange={(e) => updateSection(i, { title: e.target.value })} placeholder="Section title" />
+          <RichTextEditor value={section.content} onChange={(v) => updateSection(i, { content: v })} minHeight="100px" />
+        </div>
+      ))}
+      <Button variant="outline" size="sm" onClick={addSection} className="gap-2">
+        <Plus className="h-4 w-4" /> Add Section
+      </Button>
+      <div className="flex items-center gap-2">
+        <Switch checked={content.allowMultipleOpen || false} onCheckedChange={(v) => onChange({ ...content, allowMultipleOpen: v })} />
+        <Label className="text-sm">Allow multiple sections open</Label>
+      </div>
+    </div>
+  );
+}
+
+// --- File Upload Block Editor ---
+function FileUploadBlockEditor({ content, onChange }: { content: any; onChange: (c: any) => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Prompt</Label>
+        <Textarea value={content.prompt || ''} onChange={(e) => onChange({ ...content, prompt: e.target.value })} placeholder="Instructions for students..." />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1">
+          <Label className="text-xs">Max File Size (MB)</Label>
+          <Input type="number" value={content.maxFileSize || 20} onChange={(e) => onChange({ ...content, maxFileSize: parseInt(e.target.value) || 20 })} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Max Files</Label>
+          <Input type="number" value={content.maxFiles || 1} onChange={(e) => onChange({ ...content, maxFiles: parseInt(e.target.value) || 1 })} />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-xs">Allowed File Types</Label>
+        <div className="flex flex-wrap gap-2">
+          {['document', 'image', 'video', 'audio', 'presentation'].map(type => (
+            <label key={type} className="flex items-center gap-1.5 text-sm">
+              <input
+                type="checkbox"
+                checked={(content.allowedTypes || []).includes(type)}
+                onChange={(e) => {
+                  const types = content.allowedTypes || [];
+                  onChange({
+                    ...content,
+                    allowedTypes: e.target.checked ? [...types, type] : types.filter((t: string) => t !== type),
+                  });
+                }}
+                className="rounded"
+              />
+              <span className="capitalize">{type}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Rubric (optional)</Label>
+        <Textarea value={content.rubric || ''} onChange={(e) => onChange({ ...content, rubric: e.target.value })} placeholder="Grading criteria..." />
+      </div>
+      <div className="flex items-center gap-2">
+        <Switch checked={content.mustSubmitToComplete !== false} onCheckedChange={(v) => onChange({ ...content, mustSubmitToComplete: v })} />
+        <Label className="text-sm">Must submit to complete</Label>
+      </div>
+    </div>
+  );
+}
+
 // Helper function
 function getBlockTypeLabel(type: BlockType): string {
   const labels: Record<BlockType, string> = {
