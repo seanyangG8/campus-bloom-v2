@@ -469,7 +469,7 @@ export const demoChapters: Chapter[] = [
 
 export const demoPages: Page[] = [
   // Chapter 1: Quadratic Equations
-  { id: 'pg-1', chapterId: 'ch-1', title: 'Introduction to Quadratics', order: 1, blocksCount: 4, isRequired: true, isCompleted: true, isLocked: false },
+  { id: 'pg-1', chapterId: 'ch-1', title: 'Introduction to Quadratics', order: 1, blocksCount: 4, isRequired: true, isCompleted: false, isLocked: false },
   { id: 'pg-2', chapterId: 'ch-1', title: 'Solving by Factorisation', order: 2, blocksCount: 6, isRequired: true, isCompleted: true, isLocked: false },
   { id: 'pg-3', chapterId: 'ch-1', title: 'The Quadratic Formula', order: 3, blocksCount: 5, isRequired: true, isCompleted: false, isLocked: false },
   { id: 'pg-4', chapterId: 'ch-1', title: 'Graphing Quadratics', order: 4, blocksCount: 7, isRequired: true, isCompleted: false, isLocked: true },
