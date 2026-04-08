@@ -251,6 +251,7 @@ export interface GapFillBlockContent {
   }>;
   showCorrectAfter?: boolean;
   scoringMode?: 'all-or-nothing' | 'partial-credit';
+  mode?: 'text' | 'dropdown'; // text = type answer, dropdown = select from word bank
 }
 
 export interface PollBlockContent {
