@@ -58,10 +58,49 @@ export function AssessmentPreviewDialog({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showResults, setShowResults] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [timerActive, setTimerActive] = useState(false);
 
-  const sortedQuestions = [...questions].sort((a, b) => a.order - b.order);
+  const sortedQuestions = useMemo(() => {
+    const sorted = [...questions].sort((a, b) => a.order - b.order);
+    if (assessment?.shuffleQuestions) {
+      // Fisher-Yates shuffle with stable seed per dialog open
+      const shuffled = [...sorted];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
+    return sorted;
+  }, [questions, assessment?.shuffleQuestions, open]);
+
   const currentQuestion = sortedQuestions[currentIndex];
   const progress = ((currentIndex + 1) / sortedQuestions.length) * 100;
+
+  // Timer
+  useEffect(() => {
+    if (open && assessment?.duration && assessment.duration > 0) {
+      setTimeRemaining(assessment.duration * 60);
+      setTimerActive(true);
+    }
+    return () => setTimerActive(false);
+  }, [open, assessment?.duration]);
+
+  useEffect(() => {
+    if (!timerActive || timeRemaining === null || timeRemaining <= 0) return;
+    const interval = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev === null || prev <= 1) {
+          setTimerActive(false);
+          setShowResults(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timerActive, timeRemaining]);
 
   const handleNext = () => {
     if (currentIndex < sortedQuestions.length - 1) {
