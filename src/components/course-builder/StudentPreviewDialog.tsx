@@ -1134,51 +1134,107 @@ function ResourceBlockPreview({ block, onMarkViewed, isComplete }: { block: Bloc
   };
 
   return (
-    <div className="p-4 bg-muted/50 rounded-lg flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <span className="text-2xl">{icon}</span>
-        <div>
-          <p className="text-sm font-medium">{block.content?.fileName || "Resource file"}</p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            {block.content?.fileSize && <span>{block.content.fileSize}</span>}
-            {block.content?.versionLabel && <span>• {block.content.versionLabel}</span>}
+    <div className="p-4 bg-muted/50 rounded-lg">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">{icon}</span>
+          <div>
+            <p className="text-sm font-medium">{block.content?.fileName || "Resource file"}</p>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {block.content?.fileSize && <span>{block.content.fileSize}</span>}
+              {block.content?.versionLabel && <span>• {block.content.versionLabel}</span>}
+            </div>
           </div>
         </div>
+        <Button variant="outline" size="sm" onClick={handleClick}>
+          {isLink ? (<><ExternalLink className="h-4 w-4 mr-1" />Open</>) : (<><Download className="h-4 w-4 mr-1" />Download</>)}
+        </Button>
       </div>
-      <Button variant="outline" size="sm" onClick={handleClick}>
-        {isLink ? (<><ExternalLink className="h-4 w-4 mr-1" />Open</>) : (<><Download className="h-4 w-4 mr-1" />Download</>)}
-      </Button>
+      {/* Expiry date display */}
+      {block.content?.expiryDate && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs">
+          <AlertCircle className="h-3 w-3 text-amber-500" />
+          <span className="text-amber-600 dark:text-amber-400">
+            Expires: {new Date(block.content.expiryDate).toLocaleDateString()}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
-// --- Q&A Thread Interactive ---
+// --- Q&A Thread Interactive with upvoting + anonymous + categories ---
 function QAThreadBlockInteractive({ block, onMarkViewed, isComplete }: { block: Block; onMarkViewed: () => void; isComplete?: boolean }) {
-  const [questions, setQuestions] = useState<{ id: string; text: string; author: string; reply?: string }[]>([
-    { id: 'demo-1', text: 'Can you explain the difference between these two approaches?', author: 'Student A', reply: 'Great question! The first approach is more efficient for large datasets, while the second is simpler to implement.' },
+  const [questions, setQuestions] = useState<{ id: string; text: string; author: string; reply?: string; votes: number; category?: string }[]>([
+    { id: 'demo-1', text: 'Can you explain the difference between these two approaches?', author: 'Student A', reply: 'Great question! The first approach is more efficient for large datasets, while the second is simpler to implement.', votes: 3, category: 'Concepts' },
+    { id: 'demo-2', text: 'When would we use completing the square vs the quadratic formula?', author: 'Student B', votes: 5, category: 'Methods' },
   ]);
   const [newQuestion, setNewQuestion] = useState('');
+  const [postAnonymously, setPostAnonymously] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [votedQuestions, setVotedQuestions] = useState<Set<string>>(new Set());
+  
+  const categories = block.content?.categories || [];
+  const anonymityMode = block.content?.anonymity || 'off';
 
   const handlePost = () => {
     if (!newQuestion.trim()) return;
-    setQuestions(prev => [...prev, { id: `q-${Date.now()}`, text: newQuestion.trim(), author: 'You' }]);
+    const author = postAnonymously || anonymityMode === 'always-anonymous' ? 'Anonymous' : 'You';
+    setQuestions(prev => [...prev, { id: `q-${Date.now()}`, text: newQuestion.trim(), author, votes: 0, category: activeCategory || undefined }]);
     setNewQuestion('');
     if (!isComplete) onMarkViewed();
     toast.success("Question posted!");
   };
 
+  const handleUpvote = (qId: string) => {
+    if (votedQuestions.has(qId)) return;
+    setVotedQuestions(prev => new Set([...prev, qId]));
+    setQuestions(prev => prev.map(q => q.id === qId ? { ...q, votes: q.votes + 1 } : q));
+  };
+
+  const filteredQuestions = activeCategory 
+    ? questions.filter(q => q.category === activeCategory) 
+    : questions;
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">Ask questions and discuss with your tutor</p>
       
+      {/* Category filters */}
+      {categories.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            className={cn("text-xs px-2 py-1 rounded-full border transition-colors", !activeCategory ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+            onClick={() => setActiveCategory(null)}
+          >All</button>
+          {categories.map((cat: string) => (
+            <button
+              key={cat}
+              className={cn("text-xs px-2 py-1 rounded-full border transition-colors", activeCategory === cat ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+              onClick={() => setActiveCategory(cat)}
+            >{cat}</button>
+          ))}
+        </div>
+      )}
+      
       {/* Thread */}
       <div className="space-y-3 max-h-60 overflow-y-auto">
-        {questions.map(q => (
+        {filteredQuestions.sort((a, b) => b.votes - a.votes).map(q => (
           <div key={q.id} className="space-y-2">
             <div className="p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <MessageCircle className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-medium">{q.author}</span>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-medium">{q.author}</span>
+                  {q.category && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{q.category}</span>}
+                </div>
+                <button
+                  onClick={() => handleUpvote(q.id)}
+                  className={cn("flex items-center gap-1 text-xs transition-colors", votedQuestions.has(q.id) ? "text-primary" : "text-muted-foreground hover:text-primary")}
+                >
+                  <ThumbsUp className="h-3 w-3" />
+                  <span>{q.votes}</span>
+                </button>
               </div>
               <p className="text-sm">{q.text}</p>
             </div>
@@ -1195,22 +1251,30 @@ function QAThreadBlockInteractive({ block, onMarkViewed, isComplete }: { block: 
       </div>
 
       {/* Post new question */}
-      <div className="flex gap-2">
-        <Input
-          value={newQuestion}
-          onChange={(e) => setNewQuestion(e.target.value)}
-          placeholder="Ask a question..."
-          onKeyDown={(e) => e.key === 'Enter' && handlePost()}
-        />
-        <Button size="sm" onClick={handlePost} disabled={!newQuestion.trim()}>
-          <Send className="h-4 w-4" />
-        </Button>
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input
+            value={newQuestion}
+            onChange={(e) => setNewQuestion(e.target.value)}
+            placeholder="Ask a question..."
+            onKeyDown={(e) => e.key === 'Enter' && handlePost()}
+          />
+          <Button size="sm" onClick={handlePost} disabled={!newQuestion.trim()}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+        {anonymityMode === 'optional' && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+            <input type="checkbox" checked={postAnonymously} onChange={(e) => setPostAnonymously(e.target.checked)} className="rounded" />
+            Post anonymously
+          </label>
+        )}
       </div>
     </div>
   );
 }
 
-// --- Gap Fill Block ---
+// --- Gap Fill Block with inline rendering ---
 function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -1221,12 +1285,13 @@ function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Blo
 
   const handleSubmit = () => {
     const res: Record<string, boolean> = {};
-    let correct = 0;
     allBlanks.forEach((blank: any) => {
-      const userAnswer = (answers[blank.id] || '').trim().toLowerCase();
-      const isCorrect = blank.acceptedAnswers?.some((a: string) => a.trim().toLowerCase() === userAnswer) || false;
+      const userAnswer = (answers[blank.id] || '').trim();
+      const caseSensitive = blank.caseSensitive || false;
+      const isCorrect = blank.acceptedAnswers?.some((a: string) => 
+        caseSensitive ? a.trim() === userAnswer : a.trim().toLowerCase() === userAnswer.toLowerCase()
+      ) || false;
       res[blank.id] = isCorrect;
-      if (isCorrect) correct++;
     });
     setResults(res);
     setSubmitted(true);
@@ -1239,32 +1304,53 @@ function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Blo
     setSubmitted(false);
   };
 
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{block.content?.instruction || 'Fill in the blanks:'}</p>
-      {sentences.map((sentence: any, si: number) => (
-        <div key={sentence.id} className="space-y-2">
-          <p className="text-sm">{sentence.textWithBlanks?.replace(/\{\{\d+\}\}/g, '___')}</p>
-          <div className="flex flex-wrap gap-2">
-            {sentence.blanks?.map((blank: any, bi: number) => (
-              <div key={blank.id} className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">Blank {bi + 1}:</span>
-                <Input
+  // Render sentence with inline blanks
+  const renderSentenceInline = (sentence: any) => {
+    const text = sentence.textWithBlanks || '';
+    const parts = text.split(/(\{\{\d+\}\})/g);
+    let blankCounter = 0;
+    
+    return (
+      <p className="text-sm leading-8 flex flex-wrap items-center gap-1">
+        {parts.map((part: string, pi: number) => {
+          const match = part.match(/\{\{(\d+)\}\}/);
+          if (match) {
+            const blankIndex = blankCounter;
+            blankCounter++;
+            const blank = sentence.blanks?.[blankIndex];
+            if (!blank) return <span key={pi}>___</span>;
+            return (
+              <span key={pi} className="inline-flex items-center gap-1">
+                <input
                   value={answers[blank.id] || ''}
                   onChange={(e) => setAnswers({ ...answers, [blank.id]: e.target.value })}
                   disabled={submitted}
                   className={cn(
-                    "w-32 h-8 text-sm",
-                    submitted && results[blank.id] && "border-green-500 bg-green-50",
-                    submitted && !results[blank.id] && "border-red-500 bg-red-50"
+                    "inline-block w-28 h-7 px-2 text-sm border-b-2 bg-transparent outline-none text-center transition-colors",
+                    !submitted && "border-muted-foreground/30 focus:border-primary",
+                    submitted && results[blank.id] && "border-green-500 text-green-700 dark:text-green-400",
+                    submitted && !results[blank.id] && "border-red-500 text-red-700 dark:text-red-400"
                   )}
+                  placeholder="..."
                 />
                 {submitted && !results[blank.id] && block.content?.showCorrectAfter && (
                   <span className="text-xs text-muted-foreground">({blank.acceptedAnswers?.[0]})</span>
                 )}
-              </div>
-            ))}
-          </div>
+              </span>
+            );
+          }
+          return <span key={pi}>{part}</span>;
+        })}
+      </p>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">{block.content?.instruction || 'Fill in the blanks:'}</p>
+      {sentences.map((sentence: any) => (
+        <div key={sentence.id} className="p-3 bg-muted/30 rounded-lg">
+          {renderSentenceInline(sentence)}
         </div>
       ))}
       {!submitted ? (
@@ -1281,7 +1367,7 @@ function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Blo
   );
 }
 
-// --- Poll Block ---
+// --- Poll Block with pie chart support ---
 function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const [voted, setVoted] = useState(false);
@@ -1292,6 +1378,7 @@ function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block;
 
   const options = block.content?.options || [];
   const allowMultiple = block.content?.allowMultiple || false;
+  const chartType = block.content?.chartType || 'bar';
 
   const toggleOption = (index: number) => {
     if (voted) return;
@@ -1308,10 +1395,27 @@ function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block;
   };
 
   const totalVotes = mockResults.reduce((a: number, b: number) => a + b, 0) + (voted ? 1 : 0);
+  const pieColors = ['hsl(var(--primary))', 'hsl(var(--accent))', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+
+  // Build pie chart CSS gradient
+  const buildPieGradient = () => {
+    const voteData = options.map((_: string, i: number) => mockResults[i] + (voted && selected.includes(i) ? 1 : 0));
+    let cumulativePct = 0;
+    const stops: string[] = [];
+    voteData.forEach((votes: number, i: number) => {
+      const pct = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+      stops.push(`${pieColors[i % pieColors.length]} ${cumulativePct}% ${cumulativePct + pct}%`);
+      cumulativePct += pct;
+    });
+    return `conic-gradient(${stops.join(', ')})`;
+  };
 
   return (
     <div className="space-y-4">
       <p className="font-medium text-sm">{block.content?.question || 'Poll question'}</p>
+      {block.content?.anonymousVoting && (
+        <p className="text-xs text-muted-foreground italic">🔒 Votes are anonymous</p>
+      )}
       <div className="space-y-2">
         {options.map((opt: string, i: number) => {
           const votes = mockResults[i] + (voted && selected.includes(i) ? 1 : 0);
@@ -1326,19 +1430,30 @@ function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block;
               )}
               onClick={() => toggleOption(i)}
             >
-              {voted && block.content?.showResults !== false && (
+              {voted && block.content?.showResults !== false && chartType === 'bar' && (
                 <div className="absolute inset-0 bg-primary/10 rounded-lg" style={{ width: `${pct}%` }} />
               )}
               <div className="relative flex justify-between items-center">
-                <span className="text-sm">{opt}</span>
+                <div className="flex items-center gap-2">
+                  {voted && chartType === 'pie' && (
+                    <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: pieColors[i % pieColors.length] }} />
+                  )}
+                  <span className="text-sm">{opt}</span>
+                </div>
                 {voted && block.content?.showResults !== false && (
-                  <span className="text-xs font-medium text-muted-foreground">{pct}%</span>
+                  <span className="text-xs font-medium text-muted-foreground">{pct}% ({votes})</span>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+      {/* Pie chart visualization */}
+      {voted && block.content?.showResults !== false && chartType === 'pie' && (
+        <div className="flex justify-center py-2">
+          <div className="w-32 h-32 rounded-full" style={{ background: buildPieGradient() }} />
+        </div>
+      )}
       {!voted ? (
         <Button size="sm" onClick={handleVote} disabled={selected.length === 0}>Vote</Button>
       ) : (
@@ -1365,7 +1480,6 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
         }
         next.add(id);
       }
-      // Auto-complete when all sections revealed
       if (next.size === sections.length && !isComplete) {
         onMarkViewed();
       }
@@ -1418,15 +1532,33 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
   );
 }
 
-// --- File Upload Block ---
+// --- File Upload Block with real file input ---
 function FileUploadBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
-  const [files, setFiles] = useState<string[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const maxFiles = block.content?.maxFiles || 1;
+  const maxSize = block.content?.maxFileSize || 20;
 
-  const handleFileSelect = () => {
-    // Simulated file selection
-    const fileName = `submission_${Date.now()}.pdf`;
-    setFiles(prev => [...prev, fileName]);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = Array.from(e.target.files || []);
+    addFiles(newFiles);
+    if (e.target) e.target.value = '';
+  };
+
+  const addFiles = (newFiles: File[]) => {
+    const filtered = newFiles.filter(f => f.size <= maxSize * 1024 * 1024);
+    if (filtered.length < newFiles.length) {
+      toast.error(`Some files exceed ${maxSize}MB limit`);
+    }
+    setFiles(prev => [...prev, ...filtered].slice(0, maxFiles));
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    addFiles(Array.from(e.dataTransfer.files));
   };
 
   const handleSubmit = () => {
@@ -1435,51 +1567,90 @@ function FileUploadBlockInteractive({ block, progress, onMarkViewed }: { block: 
     toast.success('Files submitted successfully');
   };
 
+  const removeFile = (index: number) => setFiles(prev => prev.filter((_, i) => i !== index));
+
+  const isImage = (file: File) => file.type.startsWith('image/');
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{block.content?.prompt || 'Upload your work'}</p>
-      <div className="border-2 border-dashed rounded-lg p-6 text-center">
+      {/* Rubric */}
+      {block.content?.rubric && (
+        <details className="text-xs border rounded-lg p-2">
+          <summary className="cursor-pointer text-muted-foreground hover:text-primary font-medium">View Rubric</summary>
+          <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{block.content.rubric}</p>
+        </details>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        multiple={maxFiles > 1}
+        accept={(block.content?.allowedTypes || []).map((t: string) => {
+          const map: Record<string, string> = { image: 'image/*', video: 'video/*', audio: 'audio/*', document: '.pdf,.doc,.docx,.txt', presentation: '.ppt,.pptx' };
+          return map[t] || '*';
+        }).join(',')}
+        onChange={handleFileChange}
+      />
+      <div
+        className={cn(
+          "border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer",
+          isDragOver && "border-primary bg-primary/5",
+          submitted && "pointer-events-none opacity-60"
+        )}
+        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => !submitted && fileInputRef.current?.click()}
+      >
         {files.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
             {files.map((f, i) => (
-              <div key={i} className="flex items-center gap-2 justify-center text-sm">
-                <FileText className="h-4 w-4 text-primary" />
-                <span>{f}</span>
+              <div key={i} className="flex items-center gap-3 p-2 bg-muted/50 rounded">
+                {isImage(f) ? (
+                  <img src={URL.createObjectURL(f)} alt={f.name} className="w-10 h-10 rounded object-cover" />
+                ) : (
+                  <FileText className="h-8 w-8 text-primary shrink-0" />
+                )}
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-sm truncate">{f.name}</p>
+                  <p className="text-xs text-muted-foreground">{(f.size / 1024 / 1024).toFixed(1)} MB</p>
+                </div>
                 {!submitted && (
-                  <Button variant="ghost" size="sm" onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}>
+                  <Button variant="ghost" size="sm" onClick={() => removeFile(i)}>
                     <X className="h-3 w-3" />
                   </Button>
                 )}
               </div>
             ))}
+            {!submitted && files.length < maxFiles && (
+              <Button variant="outline" size="sm" className="mt-2" onClick={() => fileInputRef.current?.click()}>
+                Add More
+              </Button>
+            )}
           </div>
         ) : (
           <>
             <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">Drop files here or click to upload</p>
+            <p className="text-sm font-medium">Drop files here or click to browse</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Max {maxSize}MB • {maxFiles} file(s) • {(block.content?.allowedTypes || []).join(', ')}
+            </p>
           </>
         )}
-        {!submitted && files.length < (block.content?.maxFiles || 1) && (
-          <Button variant="outline" size="sm" className="mt-3" onClick={handleFileSelect}>
-            Select File
-          </Button>
-        )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        Max {block.content?.maxFileSize || 20}MB • {block.content?.maxFiles || 1} file(s) • 
-        {(block.content?.allowedTypes || []).join(', ')}
-      </p>
       {files.length > 0 && !submitted && (
         <Button size="sm" onClick={handleSubmit}>Submit</Button>
       )}
       {submitted && (
-        <div className="flex items-center gap-2 text-sm text-green-600">
+        <div className="flex items-center gap-2 text-sm text-success">
           <CheckCircle2 className="h-4 w-4" /> Submitted
         </div>
       )}
     </div>
   );
 }
+
 function DividerBlockPreview({ block }: { block: Block }) {
   const style = block.content?.style || 'line';
   const spacing = block.content?.spacing || 'normal';
