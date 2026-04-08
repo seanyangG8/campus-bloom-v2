@@ -1617,6 +1617,19 @@ function GapFillBlockEditor({ content, onChange }: { content: any; onChange: (c:
                   placeholder="answer1, answer2"
                   className="flex-1"
                 />
+                <label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={blank.caseSensitive === true}
+                    onChange={(e) => {
+                      const blanks = [...sentence.blanks];
+                      blanks[bi] = { ...blanks[bi], caseSensitive: e.target.checked };
+                      updateSentence(si, { blanks });
+                    }}
+                    className="rounded"
+                  />
+                  Case sensitive
+                </label>
               </div>
             ))}
           </div>
@@ -1640,6 +1653,19 @@ function GapFillBlockEditor({ content, onChange }: { content: any; onChange: (c:
             </SelectContent>
           </Select>
         </div>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Input Mode</Label>
+        <Select value={content.mode || 'text'} onValueChange={(v) => onChange({ ...content, mode: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="text">Text input (students type answers)</SelectItem>
+            <SelectItem value="dropdown">Dropdown (students select from word bank)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {content.mode === 'dropdown' ? 'Blanks show a dropdown with shuffled options from all accepted answers' : 'Students type their answers into blank fields'}
+        </p>
       </div>
     </div>
   );
