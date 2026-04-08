@@ -894,8 +894,17 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   onSubmit: (order: number[]) => { correct: boolean; score: number };
 }) {
   const items = block.content?.items || [];
+  const distractors = block.content?.distractorItems || [];
   const maxAttempts = block.maxAttempts || 0;
-  const [userOrder, setUserOrder] = useState<number[]>(() => shuffleArray(items.map((_: any, i: number) => i)));
+  
+  // Merge real items + distractors, shuffled
+  const allItems = useMemo(() => {
+    const combined = items.map((item: string, i: number) => ({ text: item, originalIndex: i, isDistractor: false }));
+    distractors.forEach((d: string) => combined.push({ text: d, originalIndex: -1, isDistractor: true }));
+    return shuffleArray(combined);
+  }, [items.length, distractors.length]);
+  
+  const [userOrder, setUserOrder] = useState<number[]>(() => allItems.map((_: any, i: number) => i));
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<{ correct: boolean; score: number } | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -915,7 +924,12 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   const handleDragEnd = () => setDraggedIndex(null);
 
   const handleSubmit = () => {
-    const res = onSubmit(userOrder);
+    // Extract only non-distractor items in user's order
+    const orderedOriginalIndices = userOrder
+      .map(i => allItems[i])
+      .filter((item: any) => !item.isDistractor)
+      .map((item: any) => item.originalIndex);
+    const res = onSubmit(orderedOriginalIndices);
     setResult(res);
     setSubmitted(true);
     setAttemptCount(prev => prev + 1);
@@ -923,7 +937,7 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   };
 
   const handleRetry = () => {
-    setUserOrder(shuffleArray(items.map((_: any, i: number) => i)));
+    setUserOrder(shuffleArray(allItems.map((_: any, i: number) => i)));
     setSubmitted(false);
     setResult(null);
   };
@@ -935,26 +949,36 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{block.content?.instruction || "Drag and drop to reorder:"}</p>
+      {distractors.length > 0 && <p className="text-xs text-muted-foreground italic">Note: Some items may not belong in the sequence.</p>}
       <div className="space-y-2">
-        {userOrder.map((itemIndex, displayIndex) => (
-          <div
-            key={itemIndex}
-            draggable={!submitted}
-            onDragStart={() => handleDragStart(displayIndex)}
-            onDragOver={(e) => handleDragOver(e, displayIndex)}
-            onDragEnd={handleDragEnd}
-            className={cn(
-              "flex items-center gap-2 p-3 bg-muted/50 rounded border transition-all",
-              !submitted && "cursor-move hover:bg-muted",
-              draggedIndex === displayIndex && "opacity-50",
-              submitted && block.content?.correctOrder?.[displayIndex] === itemIndex && "border-success bg-success/10",
-              submitted && block.content?.correctOrder?.[displayIndex] !== itemIndex && "border-destructive bg-destructive/10"
-            )}
-          >
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">{items[itemIndex] || `Item ${itemIndex + 1}`}</span>
-          </div>
-        ))}
+        {userOrder.map((itemIndex, displayIndex) => {
+          const item = allItems[itemIndex];
+          const isCorrectPosition = submitted && !item.isDistractor && block.content?.correctOrder?.[displayIndex] === item.originalIndex;
+          const isWrongPosition = submitted && !item.isDistractor && block.content?.correctOrder?.[displayIndex] !== item.originalIndex;
+          const isDistractorRevealed = submitted && item.isDistractor;
+          return (
+            <div
+              key={itemIndex}
+              draggable={!submitted}
+              onDragStart={() => handleDragStart(displayIndex)}
+              onDragOver={(e) => handleDragOver(e, displayIndex)}
+              onDragEnd={handleDragEnd}
+              className={cn(
+                "flex items-center gap-2 p-3 bg-muted/50 rounded border transition-all",
+                !submitted && "cursor-move hover:bg-muted",
+                draggedIndex === displayIndex && "opacity-50",
+                isCorrectPosition && "border-success bg-success/10",
+                isWrongPosition && "border-destructive bg-destructive/10",
+                isDistractorRevealed && "border-amber-400 bg-amber-50 dark:bg-amber-950/20 opacity-60"
+              )}
+            >
+              <span className="text-xs font-mono text-muted-foreground w-5 text-center">{displayIndex + 1}</span>
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm flex-1">{item.text}</span>
+              {isDistractorRevealed && <span className="text-xs text-amber-600">Doesn't belong</span>}
+            </div>
+          );
+        })}
       </div>
       {!submitted ? (
         <Button onClick={handleSubmit} className="w-full">Check Order</Button>
@@ -1039,8 +1063,25 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
 
   if (submitted) {
     return (
-      <div className="p-3 rounded-lg bg-success/10 text-success text-center">
-        <CheckCircle2 className="h-5 w-5 inline mr-2" /> Reflection submitted
+      <div className="space-y-3">
+        <div className="p-3 rounded-lg bg-success/10 text-success text-center">
+          <CheckCircle2 className="h-5 w-5 inline mr-2" /> Reflection submitted
+        </div>
+        {/* Show peer reflections gallery */}
+        {block.content?.showPeerReflections && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Peer Reflections</p>
+            {[
+              { author: 'Alex M.', text: 'I found the concept of quadratic factoring particularly interesting because it connects algebra with geometry...' },
+              { author: 'Sarah K.', text: 'My main takeaway was understanding how the discriminant determines the nature of roots...' },
+            ].map((peer, i) => (
+              <div key={i} className="p-3 bg-muted/50 rounded-lg">
+                <p className="text-xs font-medium mb-1">{block.content?.privacyMode === 'anonymous' ? 'Anonymous' : peer.author}</p>
+                <p className="text-sm text-muted-foreground">{peer.text}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -1048,6 +1089,13 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{block.content?.prompt || "Share your reflection..."}</p>
+      {/* Rubric display */}
+      {block.content?.rubric && (
+        <details className="text-xs border rounded-lg p-2">
+          <summary className="cursor-pointer text-muted-foreground hover:text-primary font-medium">View Rubric</summary>
+          <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{block.content.rubric}</p>
+        </details>
+      )}
       {block.content?.exampleResponse && (
         <details className="text-xs">
           <summary className="cursor-pointer text-muted-foreground hover:text-primary">View example response</summary>
