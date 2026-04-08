@@ -644,7 +644,7 @@ function ImageBlockPreview({ block, onMarkViewed, isComplete }: { block: Block; 
   );
 }
 
-// --- Quiz Block with shuffle, retry, maxAttempts, showCorrectAfterAttempt ---
+// --- Quiz Block with one-at-a-time, timer, points ---
 function QuizBlockInteractive({ block, progress, onSubmit }: { 
   block: Block; progress?: BlockProgress;
   onSubmit: (answers: Record<string, number | number[] | string>) => { passed: boolean; score: number };
@@ -653,15 +653,15 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
   const shouldShuffle = block.content?.shuffleQuestions;
   const shouldShuffleAnswers = block.content?.shuffleAnswers;
   const showCorrect = block.content?.showCorrectAfterAttempt !== false;
-  const maxAttempts = block.content?.maxAttempts || block.maxAttempts || 0; // 0 = unlimited
+  const maxAttempts = block.content?.maxAttempts || block.maxAttempts || 0;
+  const oneAtATime = block.content?.showOneAtATime === true;
+  const timeLimit = block.content?.timeLimit || 0;
 
-  // Stable shuffled question order
   const questionOrder = useMemo(() => {
     const indices = questions.map((_: any, i: number) => i);
     return shouldShuffle ? shuffleArray(indices) : indices;
   }, [questions.length, shouldShuffle]);
 
-  // Stable shuffled answer option maps per question
   const answerMaps = useMemo(() => {
     const maps: Record<string, number[]> = {};
     questions.forEach((q: any) => {
@@ -677,19 +677,42 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
   const [result, setResult] = useState<{ passed: boolean; score: number } | null>(null);
   const [showHints, setShowHints] = useState<Set<string>>(new Set());
   const [attemptCount, setAttemptCount] = useState(progress?.attempts || 0);
+  const [currentQIdx, setCurrentQIdx] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(timeLimit);
+
+  // Timer
+  useEffect(() => {
+    if (timeLimit <= 0 || submitted) return;
+    setTimeRemaining(timeLimit);
+    const interval = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timeLimit, submitted, attemptCount]);
+
+  // Auto-submit on timer expiry
+  useEffect(() => {
+    if (timeLimit > 0 && timeRemaining === 0 && !submitted) {
+      handleSubmitInternal();
+    }
+  }, [timeRemaining]);
 
   const handleAnswerChange = (questionId: string, value: number | number[] | string) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
 
-  // Map displayed index back to original for shuffled answers
   const getOriginalIndex = (questionId: string, displayIndex: number): number => {
     const map = answerMaps[questionId];
     return map ? map[displayIndex] : displayIndex;
   };
 
-  const handleSubmit = () => {
-    // Remap answers from display indices to original indices
+  const handleSubmitInternal = () => {
     const remappedAnswers: Record<string, number | number[] | string> = {};
     questions.forEach((q: any) => {
       const userAnswer = answers[q.id];
@@ -711,11 +734,7 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
     setResult(res);
     setSubmitted(true);
     setAttemptCount(prev => prev + 1);
-    if (res.passed) {
-      toast.success(`Quiz passed! Score: ${res.score}%`);
-    } else {
-      toast.error(`Quiz not passed. Score: ${res.score}%`);
-    }
+    res.passed ? toast.success(`Quiz passed! Score: ${res.score}%`) : toast.error(`Quiz not passed. Score: ${res.score}%`);
   };
 
   const handleRetry = () => {
@@ -723,6 +742,7 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
     setSubmitted(false);
     setResult(null);
     setShowHints(new Set());
+    setCurrentQIdx(0);
   };
 
   const canRetry = submitted && !result?.passed && (maxAttempts === 0 || attemptCount < maxAttempts);
@@ -739,189 +759,191 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
     return <p className="text-sm text-muted-foreground">No questions configured</p>;
   }
 
+  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+
+  // Determine which questions to show
+  const visibleQuestionIndices = oneAtATime && !submitted
+    ? [questionOrder[currentQIdx]]
+    : questionOrder;
+
+  const renderQuestion = (origIdx: number, displayNum: number) => {
+    const q = questions[origIdx];
+    if (!q) return null;
+    const userAnswer = answers[q.id];
+    const optionOrder = answerMaps[q.id] || q.options?.map((_: any, i: number) => i) || [];
+    
+    const getIsCorrect = () => {
+      if (!submitted) return false;
+      const remapped = answerMaps[q.id] 
+        ? (Array.isArray(userAnswer) 
+            ? (userAnswer as number[]).map(di => getOriginalIndex(q.id, di))
+            : typeof userAnswer === 'number' ? getOriginalIndex(q.id, userAnswer) : userAnswer)
+        : userAnswer;
+      if (q.type === 'multi-select') {
+        const userArr = Array.isArray(remapped) ? [...remapped].sort((a: number, b: number) => a - b) : [];
+        const correctArr = Array.isArray(q.correctAnswer) ? [...q.correctAnswer].sort((a: number, b: number) => a - b) : [];
+        return JSON.stringify(userArr) === JSON.stringify(correctArr);
+      } else if (q.type === 'short-answer') {
+        const userText = typeof remapped === 'string' ? remapped.trim() : '';
+        const expectedText = (q.correctAnswerText || q.options?.[0] || '').trim();
+        return q.caseSensitive ? userText === expectedText : userText.toLowerCase() === expectedText.toLowerCase();
+      }
+      return remapped === q.correctAnswer;
+    };
+    const isCorrect = getIsCorrect();
+
+    return (
+      <div key={q.id || origIdx} className="p-4 bg-muted/50 rounded-lg">
+        <div className="flex items-center justify-between mb-3">
+          <p className="font-medium text-sm">
+            Q{displayNum}: {q.question || "Question not set"}
+          </p>
+          {q.points && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">{q.points} pts</span>}
+        </div>
+
+        {/* Single choice */}
+        {(q.type === 'single-choice' || !q.type) && (
+          <div className="space-y-2">
+            {optionOrder.map((origOptIdx: number, displayIdx: number) => {
+              const opt = q.options?.[origOptIdx];
+              const isSelected = userAnswer === displayIdx;
+              const isCorrectOption = q.correctAnswer === origOptIdx;
+              return (
+                <button key={displayIdx} onClick={() => !submitted && handleAnswerChange(q.id, displayIdx)} disabled={submitted}
+                  className={cn("w-full p-3 text-left text-sm border rounded-lg transition-all",
+                    isSelected && !submitted && "border-primary bg-primary/10",
+                    submitted && showCorrect && isCorrectOption && "border-success bg-success/10",
+                    submitted && showCorrect && isSelected && !isCorrectOption && "border-destructive bg-destructive/10",
+                    submitted && !showCorrect && isSelected && "border-muted-foreground bg-muted",
+                    !submitted && !isSelected && "hover:bg-muted"
+                  )}>
+                  {String.fromCharCode(65 + displayIdx)}) {opt || `Option ${displayIdx + 1}`}
+                  {submitted && showCorrect && isCorrectOption && <CheckCircle2 className="inline h-4 w-4 ml-2 text-success" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Multi-select */}
+        {q.type === 'multi-select' && (
+          <div className="space-y-2">
+            {!submitted && Array.isArray(q.correctAnswer) && q.correctAnswer.length > 1 && (
+              <p className="text-xs text-muted-foreground italic mb-1">Select {q.correctAnswer.length} answers</p>
+            )}
+            {optionOrder.map((origOptIdx: number, displayIdx: number) => {
+              const opt = q.options?.[origOptIdx];
+              const selected = Array.isArray(userAnswer) && userAnswer.includes(displayIdx);
+              const isCorrectOption = Array.isArray(q.correctAnswer) && q.correctAnswer.includes(origOptIdx);
+              return (
+                <button key={displayIdx}
+                  onClick={() => { if (submitted) return; const current = (userAnswer as number[]) || []; handleAnswerChange(q.id, selected ? current.filter(x => x !== displayIdx) : [...current, displayIdx]); }}
+                  disabled={submitted}
+                  className={cn("w-full p-3 text-left text-sm border rounded-lg transition-all flex items-center gap-2",
+                    selected && !submitted && "border-primary bg-primary/10",
+                    submitted && showCorrect && isCorrectOption && "border-success bg-success/10",
+                    submitted && showCorrect && selected && !isCorrectOption && "border-destructive bg-destructive/10",
+                    !submitted && !selected && "hover:bg-muted"
+                  )}>
+                  <input type="checkbox" checked={selected} readOnly className="h-4 w-4" />
+                  {String.fromCharCode(65 + displayIdx)}) {opt || `Option ${displayIdx + 1}`}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* True/False */}
+        {q.type === 'true-false' && (
+          <div className="flex gap-4">
+            {['True', 'False'].map((opt, i) => (
+              <button key={opt} onClick={() => !submitted && handleAnswerChange(q.id, i)} disabled={submitted}
+                className={cn("flex-1 p-3 text-center text-sm border rounded-lg transition-all",
+                  userAnswer === i && !submitted && "border-primary bg-primary/10",
+                  submitted && showCorrect && q.correctAnswer === i && "border-success bg-success/10",
+                  submitted && showCorrect && userAnswer === i && q.correctAnswer !== i && "border-destructive bg-destructive/10",
+                  !submitted && userAnswer !== i && "hover:bg-muted"
+                )}>
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Short Answer */}
+        {q.type === 'short-answer' && (
+          <div className="space-y-2">
+            <Input type="text" value={(userAnswer as string) || ''} onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+              placeholder="Type your answer..." disabled={submitted}
+              className={cn(submitted && showCorrect && isCorrect && "border-success bg-success/10", submitted && showCorrect && !isCorrect && "border-destructive bg-destructive/10")} />
+            {submitted && showCorrect && (
+              <div className={cn("text-xs p-2 rounded", isCorrect ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
+                {isCorrect ? <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Correct!</span>
+                  : <span>Expected: <strong>{q.correctAnswerText || q.options?.[0]}</strong></span>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {q.hint && !submitted && (
+          <button onClick={() => toggleHint(q.id)} className="mt-2 text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
+            <Lightbulb className="h-3 w-3" /> {showHints.has(q.id) ? 'Hide hint' : 'Show hint'}
+          </button>
+        )}
+        {showHints.has(q.id) && q.hint && <p className="mt-2 text-xs bg-muted p-2 rounded">{q.hint}</p>}
+        {submitted && showCorrect && q.explanation && (
+          <div className="mt-3 p-2 bg-muted rounded text-xs"><strong>Explanation:</strong> {q.explanation}</div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
-      {/* Progress indicator */}
+      {/* Timer */}
+      {timeLimit > 0 && !submitted && (
+        <div className={cn("flex items-center gap-2 text-sm font-mono p-2 rounded-lg", timeRemaining <= 30 ? "bg-destructive/10 text-destructive" : "bg-muted")}>
+          <Clock className="h-4 w-4" />
+          <span>{formatTime(timeRemaining)}</span>
+          {timeRemaining <= 30 && <span className="text-xs">Hurry!</span>}
+        </div>
+      )}
+      {/* Progress */}
       {questions.length > 1 && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Question {submitted ? questions.length : Math.min(Object.keys(answers).length + 1, questions.length)} of {questions.length}</span>
+          <span>Question {oneAtATime && !submitted ? currentQIdx + 1 : (submitted ? questions.length : Math.min(Object.keys(answers).length + 1, questions.length))} of {questions.length}</span>
           <span>{Object.keys(answers).length} answered</span>
         </div>
       )}
-      {questionOrder.map((origIdx: number) => {
-        const q = questions[origIdx];
-        if (!q) return null;
-        const userAnswer = answers[q.id];
-        const isAnswered = userAnswer !== undefined && userAnswer !== '';
 
-        // Get the display-order options for this question
-        const optionOrder = answerMaps[q.id] || q.options?.map((_: any, i: number) => i) || [];
-        
-        // Check correctness using original indices (after remapping)
-        const getIsCorrect = () => {
-          if (!submitted) return false;
-          // Need to use remapped answer for checking
-          const remapped = answerMaps[q.id] 
-            ? (Array.isArray(userAnswer) 
-                ? (userAnswer as number[]).map(di => getOriginalIndex(q.id, di))
-                : typeof userAnswer === 'number' ? getOriginalIndex(q.id, userAnswer) : userAnswer)
-            : userAnswer;
-          
-          if (q.type === 'multi-select') {
-            const userArr = Array.isArray(remapped) ? [...remapped].sort((a: number, b: number) => a - b) : [];
-            const correctArr = Array.isArray(q.correctAnswer) ? [...q.correctAnswer].sort((a: number, b: number) => a - b) : [];
-            return JSON.stringify(userArr) === JSON.stringify(correctArr);
-          } else if (q.type === 'short-answer') {
-            const userText = typeof remapped === 'string' ? remapped.trim() : '';
-            const expectedText = (q.correctAnswerText || q.options?.[0] || '').trim();
-            return q.caseSensitive ? userText === expectedText : userText.toLowerCase() === expectedText.toLowerCase();
-          } else {
-            return remapped === q.correctAnswer;
-          }
-        };
-        const isCorrect = getIsCorrect();
+      {visibleQuestionIndices.map((origIdx: number, i: number) => 
+        renderQuestion(origIdx, oneAtATime && !submitted ? currentQIdx + 1 : questionOrder.indexOf(origIdx) + 1)
+      )}
 
-        return (
-          <div key={q.id || origIdx} className="p-4 bg-muted/50 rounded-lg">
-            <p className="font-medium text-sm mb-3">
-              Q{questionOrder.indexOf(origIdx) + 1}: {q.question || "Question not set"}
-            </p>
+      {/* One-at-a-time navigation */}
+      {oneAtATime && !submitted && (
+        <div className="flex items-center justify-between">
+          <Button variant="outline" size="sm" onClick={() => setCurrentQIdx(prev => prev - 1)} disabled={currentQIdx === 0}>
+            <ChevronLeft className="h-4 w-4" /> Previous
+          </Button>
+          {currentQIdx < questionOrder.length - 1 ? (
+            <Button variant="outline" size="sm" onClick={() => setCurrentQIdx(prev => prev + 1)}>
+              Next <ChevronRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button onClick={handleSubmitInternal} disabled={Object.keys(answers).length < questions.length}>
+              Submit All
+            </Button>
+          )}
+        </div>
+      )}
 
-            {/* Single choice */}
-            {(q.type === 'single-choice' || !q.type) && (
-              <div className="space-y-2">
-                {optionOrder.map((origOptIdx: number, displayIdx: number) => {
-                  const opt = q.options?.[origOptIdx];
-                  const isSelected = userAnswer === displayIdx;
-                  const isCorrectOption = q.correctAnswer === origOptIdx;
-                  return (
-                    <button 
-                      key={displayIdx}
-                      onClick={() => !submitted && handleAnswerChange(q.id, displayIdx)}
-                      disabled={submitted}
-                      className={cn(
-                        "w-full p-3 text-left text-sm border rounded-lg transition-all",
-                        isSelected && !submitted && "border-primary bg-primary/10",
-                        submitted && showCorrect && isCorrectOption && "border-success bg-success/10",
-                        submitted && showCorrect && isSelected && !isCorrectOption && "border-destructive bg-destructive/10",
-                        submitted && !showCorrect && isSelected && "border-muted-foreground bg-muted",
-                        !submitted && !isSelected && "hover:bg-muted"
-                      )}
-                    >
-                      {String.fromCharCode(65 + displayIdx)}) {opt || `Option ${displayIdx + 1}`}
-                      {submitted && showCorrect && isCorrectOption && <CheckCircle2 className="inline h-4 w-4 ml-2 text-success" />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Multi-select */}
-            {q.type === 'multi-select' && (
-              <div className="space-y-2">
-                {optionOrder.map((origOptIdx: number, displayIdx: number) => {
-                  const opt = q.options?.[origOptIdx];
-                  const selected = Array.isArray(userAnswer) && userAnswer.includes(displayIdx);
-                  const isCorrectOption = Array.isArray(q.correctAnswer) && q.correctAnswer.includes(origOptIdx);
-                  return (
-                    <button 
-                      key={displayIdx}
-                      onClick={() => {
-                        if (submitted) return;
-                        const current = (userAnswer as number[]) || [];
-                        const newAnswer = selected ? current.filter(x => x !== displayIdx) : [...current, displayIdx];
-                        handleAnswerChange(q.id, newAnswer);
-                      }}
-                      disabled={submitted}
-                      className={cn(
-                        "w-full p-3 text-left text-sm border rounded-lg transition-all flex items-center gap-2",
-                        selected && !submitted && "border-primary bg-primary/10",
-                        submitted && showCorrect && isCorrectOption && "border-success bg-success/10",
-                        submitted && showCorrect && selected && !isCorrectOption && "border-destructive bg-destructive/10",
-                        submitted && !showCorrect && selected && "border-muted-foreground bg-muted",
-                        !submitted && !selected && "hover:bg-muted"
-                      )}
-                    >
-                      <input type="checkbox" checked={selected} readOnly className="h-4 w-4" />
-                      {String.fromCharCode(65 + displayIdx)}) {opt || `Option ${displayIdx + 1}`}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* True/False */}
-            {q.type === 'true-false' && (
-              <div className="flex gap-4">
-                {['True', 'False'].map((opt, i) => (
-                  <button
-                    key={opt}
-                    onClick={() => !submitted && handleAnswerChange(q.id, i)}
-                    disabled={submitted}
-                    className={cn(
-                      "flex-1 p-3 text-center text-sm border rounded-lg transition-all",
-                      userAnswer === i && !submitted && "border-primary bg-primary/10",
-                      submitted && showCorrect && q.correctAnswer === i && "border-success bg-success/10",
-                      submitted && showCorrect && userAnswer === i && q.correctAnswer !== i && "border-destructive bg-destructive/10",
-                      submitted && !showCorrect && userAnswer === i && "border-muted-foreground bg-muted",
-                      !submitted && userAnswer !== i && "hover:bg-muted"
-                    )}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Short Answer */}
-            {q.type === 'short-answer' && (
-              <div className="space-y-2">
-                <Input
-                  type="text"
-                  value={(userAnswer as string) || ''}
-                  onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                  placeholder="Type your answer..."
-                  disabled={submitted}
-                  className={cn(
-                    submitted && showCorrect && isCorrect && "border-success bg-success/10",
-                    submitted && showCorrect && !isCorrect && "border-destructive bg-destructive/10",
-                    submitted && !showCorrect && "border-muted-foreground"
-                  )}
-                />
-                {submitted && showCorrect && (
-                  <div className={cn("text-xs p-2 rounded", isCorrect ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
-                    {isCorrect ? (
-                      <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Correct!</span>
-                    ) : (
-                      <span>Expected: <strong>{q.correctAnswerText || q.options?.[0]}</strong></span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Hint */}
-            {q.hint && !submitted && (
-              <button onClick={() => toggleHint(q.id)} className="mt-2 text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
-                <Lightbulb className="h-3 w-3" />
-                {showHints.has(q.id) ? 'Hide hint' : 'Show hint'}
-              </button>
-            )}
-            {showHints.has(q.id) && q.hint && <p className="mt-2 text-xs bg-muted p-2 rounded">{q.hint}</p>}
-
-            {/* Explanation */}
-            {submitted && showCorrect && q.explanation && (
-              <div className="mt-3 p-2 bg-muted rounded text-xs"><strong>Explanation:</strong> {q.explanation}</div>
-            )}
-          </div>
-        );
-      })}
-
-      {!submitted ? (
-        <Button onClick={handleSubmit} disabled={Object.keys(answers).length < questions.length} className="w-full">
+      {!oneAtATime && !submitted && (
+        <Button onClick={handleSubmitInternal} disabled={Object.keys(answers).length < questions.length} className="w-full">
           Submit Answers
         </Button>
-      ) : (
+      )}
+      {submitted && (
         <div className="space-y-2">
           <div className={cn("p-3 rounded-lg text-center", result?.passed ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
             <p className="font-medium">{result?.passed ? "Passed!" : "Not passed"} - Score: {result?.score}%</p>
