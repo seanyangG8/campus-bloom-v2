@@ -12,6 +12,7 @@ import { BlockLibrary } from "@/components/course-builder/BlockLibrary";
 import { PageEditor } from "@/components/course-builder/PageEditor";
 import { StudentPreviewDialog } from "@/components/course-builder/StudentPreviewDialog";
 import { PublishDialog } from "@/components/course-builder/PublishDialog";
+import { CourseSettingsDialog } from "@/components/course-builder/CourseSettingsDialog";
 
 export function CourseDetailPage() {
   const { courseId } = useParams();
@@ -35,6 +36,7 @@ function CourseBuilder({ course }: { course: typeof demoCourses[0] }) {
   
   const [previewOpen, setPreviewOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -74,12 +76,7 @@ function CourseBuilder({ course }: { course: typeof demoCourses[0] }) {
             <Button 
               variant="outline" 
               size="icon"
-              onClick={() => {
-                // TODO: Open course settings dialog
-                import('sonner').then(({ toast }) => {
-                  toast.info('Course settings dialog coming soon');
-                });
-              }}
+              onClick={() => setSettingsOpen(true)}
             >
               <Settings className="h-4 w-4" />
             </Button>
@@ -150,6 +147,13 @@ function CourseBuilder({ course }: { course: typeof demoCourses[0] }) {
         course={course}
         open={publishOpen}
         onOpenChange={setPublishOpen}
+      />
+
+      {/* Course Settings Dialog */}
+      <CourseSettingsDialog
+        course={course}
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
       />
     </div>
   );
