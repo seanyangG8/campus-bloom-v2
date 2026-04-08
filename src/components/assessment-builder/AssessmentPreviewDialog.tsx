@@ -167,12 +167,20 @@ export function AssessmentPreviewDialog({
             {assessment.title}
           </DialogTitle>
           <DialogDescription className="flex items-center gap-4">
-            {assessment.duration > 0 && (
+            {timeRemaining !== null && timeRemaining > 0 ? (
+              <span className={cn(
+                "flex items-center gap-1 font-mono font-medium",
+                timeRemaining < 60 && "text-destructive"
+              )}>
+                <Clock className="h-3.5 w-3.5" />
+                {formatTime(timeRemaining)}
+              </span>
+            ) : assessment.duration > 0 ? (
               <span className="flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5" />
                 {assessment.duration} mins
               </span>
-            )}
+            ) : null}
             <span>
               {sortedQuestions.length} {sortedQuestions.length === 1 ? 'question' : 'questions'}
             </span>
