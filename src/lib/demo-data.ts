@@ -517,7 +517,7 @@ export const demoBlocks: Block[] = [
   
   // Chapter 2, Page 7: Laws of Indices
   { id: 'blk-9', pageId: 'pg-7', type: 'text', title: 'The Laws of Indices', content: { html: '<h3>Key Laws:</h3><ul><li>aᵐ × aⁿ = aᵐ⁺ⁿ</li><li>aᵐ ÷ aⁿ = aᵐ⁻ⁿ</li><li>(aᵐ)ⁿ = aᵐⁿ</li><li>a⁰ = 1</li><li>a⁻ⁿ = 1/aⁿ</li></ul>' }, order: 1, isRequired: false, isCompleted: false },
-  { id: 'blk-10', pageId: 'pg-7', type: 'drag-drop-reorder', title: 'Order the Steps', content: { instruction: 'Simplify 2³ × 2⁵ ÷ 2² by ordering these steps:', items: ['Apply multiplication law: 2³⁺⁵ = 2⁸', 'Apply division law: 2⁸⁻² = 2⁶', 'Calculate: 2⁶ = 64'], correctOrder: [0, 1, 2] }, order: 2, isRequired: true, isCompleted: false },
+  { id: 'blk-10', pageId: 'pg-7', type: 'drag-drop-reorder', title: 'Order the Steps', content: { instruction: 'Simplify 2³ × 2⁵ ÷ 2² by ordering these steps:', items: ['Apply multiplication law: 2³⁺⁵ = 2⁸', 'Apply division law: 2⁸⁻² = 2⁶', 'Calculate: 2⁶ = 64'], correctOrder: [0, 1, 2], distractorItems: ['Take the square root', 'Multiply the exponents'] }, order: 2, isRequired: true, isCompleted: false },
   { id: 'blk-11', pageId: 'pg-7', type: 'micro-quiz', title: 'Practice Quiz', content: { questions: [{ id: 'q-3', question: 'Simplify: a⁴ × a³', options: ['a⁷', 'a¹²', 'a¹', '2a⁷'], correctAnswer: 0 }, { id: 'q-4', question: 'What is 2⁻³?', options: ['-8', '-6', '1/8', '1/6'], correctAnswer: 2 }] }, order: 3, isRequired: true, isCompleted: false },
   { id: 'blk-12', pageId: 'pg-7', type: 'reflection', title: 'Reflection', content: { prompt: 'Which law of indices do you find most useful? Give an example.', minWords: 30 }, order: 4, isRequired: false, isCompleted: false },
   
