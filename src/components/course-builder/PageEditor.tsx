@@ -18,7 +18,9 @@ import {
   Edit,
   ChevronUp,
   ChevronDown,
+  ChevronRight,
   Info,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -72,6 +74,10 @@ const iconMap: Record<BlockType, any> = {
   "qa-thread": MessageSquare,
   resource: FileText,
   divider: Minus,
+  "gap-fill": Type,
+  poll: HelpCircle,
+  reveal: ListOrdered,
+  "file-upload": FileText,
 };
 
 interface PageEditorProps {
@@ -947,11 +953,60 @@ function BlockPreview({ block, isAdmin }: { block: Block; isAdmin: boolean }) {
           </Button>
         </div>
       )}
+
+      {block.type === "gap-fill" && (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">{block.content?.instruction || 'Fill in the blanks:'}</p>
+          {block.content?.sentences?.slice(0, 2).map((s: any, i: number) => (
+            <div key={i} className="p-2 bg-muted/50 rounded text-sm">
+              {s.textWithBlanks?.replace(/\{\{\d+\}\}/g, '____') || 'Sentence with blanks...'}
+            </div>
+          ))}
+          {block.content?.sentences?.length > 2 && (
+            <p className="text-xs text-muted-foreground">+{block.content.sentences.length - 2} more sentences</p>
+          )}
+        </div>
+      )}
+
+      {block.type === "poll" && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{block.content?.question || 'Poll question'}</p>
+          <div className="space-y-1">
+            {block.content?.options?.slice(0, 3).map((opt: string, i: number) => (
+              <div key={i} className="p-2 bg-muted/50 rounded text-sm flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full border border-muted-foreground" />
+                {opt || `Option ${i + 1}`}
+              </div>
+            ))}
+          </div>
+          {block.content?.allowMultiple && <span className="text-xs text-muted-foreground">Multiple selection</span>}
+        </div>
+      )}
+
+      {block.type === "reveal" && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground uppercase">{block.content?.style || 'accordion'}</p>
+          {block.content?.sections?.map((s: any, i: number) => (
+            <div key={i} className="flex items-center gap-2 p-2 bg-muted/50 rounded text-sm">
+              <ChevronRight className="h-3 w-3 text-muted-foreground" />
+              {s.title || `Section ${i + 1}`}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {block.type === "file-upload" && (
+        <div className="border-2 border-dashed rounded-lg p-4 text-center">
+          <Upload className="h-6 w-6 mx-auto text-muted-foreground/50 mb-1" />
+          <p className="text-sm text-muted-foreground">{block.content?.prompt || 'Upload your work'}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Max {block.content?.maxFileSize || 20}MB • {block.content?.maxFiles || 1} file(s)
+          </p>
+        </div>
+      )}
     </div>
   );
 }
-
-// Page Settings Dialog
 function PageSettingsDialog({
   page,
   open,

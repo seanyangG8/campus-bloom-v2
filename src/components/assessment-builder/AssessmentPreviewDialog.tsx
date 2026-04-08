@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft,
@@ -58,10 +58,49 @@ export function AssessmentPreviewDialog({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [showResults, setShowResults] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [timerActive, setTimerActive] = useState(false);
 
-  const sortedQuestions = [...questions].sort((a, b) => a.order - b.order);
+  const sortedQuestions = useMemo(() => {
+    const sorted = [...questions].sort((a, b) => a.order - b.order);
+    if (assessment?.shuffleQuestions) {
+      // Fisher-Yates shuffle with stable seed per dialog open
+      const shuffled = [...sorted];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
+    return sorted;
+  }, [questions, assessment?.shuffleQuestions, open]);
+
   const currentQuestion = sortedQuestions[currentIndex];
   const progress = ((currentIndex + 1) / sortedQuestions.length) * 100;
+
+  // Timer
+  useEffect(() => {
+    if (open && assessment?.duration && assessment.duration > 0) {
+      setTimeRemaining(assessment.duration * 60);
+      setTimerActive(true);
+    }
+    return () => setTimerActive(false);
+  }, [open, assessment?.duration]);
+
+  useEffect(() => {
+    if (!timerActive || timeRemaining === null || timeRemaining <= 0) return;
+    const interval = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev === null || prev <= 1) {
+          setTimerActive(false);
+          setShowResults(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timerActive, timeRemaining]);
 
   const handleNext = () => {
     if (currentIndex < sortedQuestions.length - 1) {
@@ -81,11 +120,22 @@ export function AssessmentPreviewDialog({
     setCurrentIndex(0);
     setAnswers({});
     setShowResults(false);
+    if (assessment?.duration && assessment.duration > 0) {
+      setTimeRemaining(assessment.duration * 60);
+      setTimerActive(true);
+    }
   };
 
   const handleClose = () => {
     handleReset();
+    setTimerActive(false);
     onOpenChange(false);
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   if (!assessment || questions.length === 0) {
@@ -117,12 +167,20 @@ export function AssessmentPreviewDialog({
             {assessment.title}
           </DialogTitle>
           <DialogDescription className="flex items-center gap-4">
-            {assessment.duration > 0 && (
+            {timeRemaining !== null && timeRemaining > 0 ? (
+              <span className={cn(
+                "flex items-center gap-1 font-mono font-medium",
+                timeRemaining < 60 && "text-destructive"
+              )}>
+                <Clock className="h-3.5 w-3.5" />
+                {formatTime(timeRemaining)}
+              </span>
+            ) : assessment.duration > 0 ? (
               <span className="flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5" />
                 {assessment.duration} mins
               </span>
-            )}
+            ) : null}
             <span>
               {sortedQuestions.length} {sortedQuestions.length === 1 ? 'question' : 'questions'}
             </span>
@@ -578,6 +636,75 @@ function FileUploadPreview({ content }: { content: FileUploadContent }) {
   );
 }
 
+// Scoring helper
+function scoreQuestion(question: Question, answer: any): { correct: boolean; earned: number } {
+  if (answer === undefined || answer === null) return { correct: false, earned: 0 };
+
+  switch (question.type) {
+    case 'multiple-choice': {
+      const content = question.content as MultipleChoiceContent;
+      const correctOption = content.options.find(o => o.isCorrect);
+      const isCorrect = correctOption?.id === answer;
+      return { correct: isCorrect, earned: isCorrect ? question.points : 0 };
+    }
+    case 'multiple-select': {
+      const content = question.content as MultipleSelectContent;
+      const correctIds = content.options.filter(o => o.isCorrect).map(o => o.id).sort();
+      const selectedIds = (answer as string[] || []).sort();
+      const isCorrect = correctIds.length === selectedIds.length && correctIds.every((id, i) => id === selectedIds[i]);
+      if (isCorrect) return { correct: true, earned: question.points };
+      // Partial credit: fraction of correct selections
+      const correctSelections = selectedIds.filter(id => correctIds.includes(id)).length;
+      const wrongSelections = selectedIds.filter(id => !correctIds.includes(id)).length;
+      const partial = Math.max(0, (correctSelections - wrongSelections) / correctIds.length);
+      return { correct: false, earned: Math.round(question.points * partial * 100) / 100 };
+    }
+    case 'true-false': {
+      const content = question.content as TrueFalseContent;
+      const isCorrect = answer === content.correctAnswer;
+      return { correct: isCorrect, earned: isCorrect ? question.points : 0 };
+    }
+    case 'short-answer': {
+      const content = question.content as ShortAnswerContent;
+      const userAnswer = (answer as string || '').trim();
+      const isCorrect = content.acceptedAnswers.some(a =>
+        content.caseSensitive ? a.trim() === userAnswer : a.trim().toLowerCase() === userAnswer.toLowerCase()
+      );
+      return { correct: isCorrect, earned: isCorrect ? question.points : 0 };
+    }
+    case 'fill-blank': {
+      const content = question.content as FillBlankContent;
+      const userAnswers = answer as Record<string, string> || {};
+      let correctCount = 0;
+      content.blanks.forEach(blank => {
+        const userVal = (userAnswers[blank.id] || '').trim();
+        if (blank.acceptedAnswers.some(a => a.trim().toLowerCase() === userVal.toLowerCase())) {
+          correctCount++;
+        }
+      });
+      const fraction = content.blanks.length > 0 ? correctCount / content.blanks.length : 0;
+      return { correct: fraction === 1, earned: Math.round(question.points * fraction * 100) / 100 };
+    }
+    case 'matching': {
+      const content = question.content as MatchingContent;
+      const userMatches = answer as Record<string, string> || {};
+      let correctCount = 0;
+      content.pairs.forEach(pair => {
+        if (userMatches[pair.id] === pair.right) correctCount++;
+      });
+      const fraction = content.pairs.length > 0 ? correctCount / content.pairs.length : 0;
+      return { correct: fraction === 1, earned: Math.round(question.points * fraction * 100) / 100 };
+    }
+    // Submission types - always "answered" (graded manually)
+    case 'essay':
+    case 'long-answer':
+    case 'file-upload':
+      return { correct: true, earned: 0 }; // manually graded
+    default:
+      return { correct: false, earned: 0 };
+  }
+}
+
 function ResultsView({
   assessment,
   questions,
@@ -591,52 +718,106 @@ function ResultsView({
   onRetry: () => void;
   onClose: () => void;
 }) {
-  const answeredCount = Object.keys(answers).length;
-  const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
-  const scorePercent = Math.round((answeredCount / questions.length) * 100);
+  const autoGradedTypes = ['multiple-choice', 'multiple-select', 'true-false', 'short-answer', 'fill-blank', 'matching'];
+  const autoGradedQuestions = questions.filter(q => autoGradedTypes.includes(q.type));
+  const submissionQuestions = questions.filter(q => !autoGradedTypes.includes(q.type));
+
+  let earnedPoints = 0;
+  let totalAutoPoints = 0;
+  const questionResults: { question: Question; result: { correct: boolean; earned: number } }[] = [];
+
+  questions.forEach(q => {
+    const result = scoreQuestion(q, answers[q.id]);
+    questionResults.push({ question: q, result });
+    if (autoGradedTypes.includes(q.type)) {
+      earnedPoints += result.earned;
+      totalAutoPoints += q.points;
+    }
+  });
+
+  const scorePercent = totalAutoPoints > 0 ? Math.round((earnedPoints / totalAutoPoints) * 100) : 0;
   const passed = scorePercent >= assessment.passMark;
+  const answeredCount = Object.keys(answers).length;
 
   return (
-    <div className="py-6 text-center">
-      <motion.div
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: 'spring', delay: 0.1 }}
-        className={cn(
-          'w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center',
-          passed ? 'bg-green-100' : 'bg-red-100'
-        )}
-      >
-        {passed ? (
-          <Check className="h-12 w-12 text-green-600" />
-        ) : (
-          <X className="h-12 w-12 text-red-600" />
-        )}
-      </motion.div>
+    <div className="py-4 space-y-6 overflow-y-auto max-h-[60vh]">
+      {/* Score summary */}
+      <div className="text-center">
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', delay: 0.1 }}
+          className={cn(
+            'w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center',
+            passed ? 'bg-green-100' : 'bg-red-100'
+          )}
+        >
+          {passed ? (
+            <Check className="h-10 w-10 text-green-600" />
+          ) : (
+            <X className="h-10 w-10 text-red-600" />
+          )}
+        </motion.div>
 
-      <h3 className="text-2xl font-bold mb-2">
-        {passed ? 'Assessment Complete!' : 'Assessment Submitted'}
-      </h3>
-      <p className="text-muted-foreground mb-6">
-        You answered {answeredCount}/{questions.length} questions
-      </p>
+        <h3 className="text-2xl font-bold mb-1">
+          {passed ? 'Passed!' : 'Not Passed'}
+        </h3>
+        <p className="text-muted-foreground text-sm">
+          Score: {scorePercent}% ({earnedPoints}/{totalAutoPoints} points)
+        </p>
+      </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-3 gap-4">
         <div className="text-center">
-          <p className="text-2xl font-bold">{answeredCount}</p>
+          <p className="text-xl font-bold">{scorePercent}%</p>
+          <p className="text-xs text-muted-foreground">Score</p>
+        </div>
+        <div className="text-center">
+          <p className="text-xl font-bold">{answeredCount}/{questions.length}</p>
           <p className="text-xs text-muted-foreground">Answered</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold">{totalPoints}</p>
-          <p className="text-xs text-muted-foreground">Total Points</p>
-        </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold">{assessment.passMark}%</p>
+          <p className="text-xl font-bold">{assessment.passMark}%</p>
           <p className="text-xs text-muted-foreground">Pass Mark</p>
         </div>
       </div>
 
-      <div className="flex gap-3 justify-center">
+      {/* Per-question feedback */}
+      {assessment.showResults && (
+        <div className="space-y-2">
+          <h4 className="font-semibold text-sm">Question Review</h4>
+          {questionResults.map(({ question, result }, i) => {
+            const isSubmission = !autoGradedTypes.includes(question.type);
+            return (
+              <div key={question.id} className={cn(
+                "flex items-start gap-3 p-3 rounded-lg border text-sm",
+                isSubmission ? "bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800" :
+                result.correct ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800" :
+                "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+              )}>
+                <span className="font-medium text-muted-foreground shrink-0">Q{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{question.text}</p>
+                  {question.explanation && (
+                    <p className="text-xs text-muted-foreground mt-1">{question.explanation}</p>
+                  )}
+                </div>
+                <span className="shrink-0 text-xs font-medium">
+                  {isSubmission ? 'Pending' : result.correct ? `✓ ${result.earned}/${question.points}` : `✗ ${result.earned}/${question.points}`}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {submissionQuestions.length > 0 && (
+        <p className="text-xs text-muted-foreground text-center">
+          {submissionQuestions.length} submission question(s) require manual grading.
+        </p>
+      )}
+
+      <div className="flex gap-3 justify-center pt-2">
         <Button variant="outline" onClick={onRetry}>
           Try Again
         </Button>

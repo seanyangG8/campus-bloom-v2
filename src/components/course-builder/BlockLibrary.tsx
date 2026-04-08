@@ -11,6 +11,10 @@ import {
   FileText, 
   Minus,
   GripVertical,
+  TextCursorInput,
+  BarChart3,
+  ChevronDown,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,11 +29,15 @@ const iconMap: Record<string, any> = {
   MessagesSquare,
   FileText,
   Minus,
+  TextCursorInput,
+  BarChart3,
+  ChevronDown,
+  Upload,
 };
 
 export function BlockLibrary() {
-  const contentBlocks = blockTypes.filter(b => ['text', 'video', 'image', 'resource', 'divider'].includes(b.type));
-  const activeBlocks = blockTypes.filter(b => ['micro-quiz', 'drag-drop-reorder', 'whiteboard', 'reflection', 'qa-thread'].includes(b.type));
+  const contentBlocks = blockTypes.filter(b => ['text', 'video', 'image', 'resource', 'divider', 'reveal'].includes(b.type));
+  const activeBlocks = blockTypes.filter(b => ['micro-quiz', 'drag-drop-reorder', 'gap-fill', 'poll', 'whiteboard', 'reflection', 'file-upload', 'qa-thread'].includes(b.type));
 
   return (
     <div className="h-full flex flex-col">

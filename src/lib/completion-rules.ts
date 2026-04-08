@@ -86,6 +86,35 @@ export const blockCompletionRules: Record<BlockType, BlockCompletionRule> = {
     description: 'Not counted towards completion',
     countsTowardsCompletion: false,
   },
+  'gap-fill': {
+    type: 'gap-fill',
+    method: 'answered',
+    label: 'Fill blanks',
+    description: 'Complete when blanks are filled correctly',
+    countsTowardsCompletion: true,
+    supportsPassMark: true,
+  },
+  'poll': {
+    type: 'poll',
+    method: 'answered',
+    label: 'Vote',
+    description: 'Complete when voted',
+    countsTowardsCompletion: true,
+  },
+  'reveal': {
+    type: 'reveal',
+    method: 'viewed',
+    label: 'View content',
+    description: 'Complete when all sections revealed',
+    countsTowardsCompletion: true,
+  },
+  'file-upload': {
+    type: 'file-upload',
+    method: 'submitted',
+    label: 'Upload file',
+    description: 'Complete when file uploaded',
+    countsTowardsCompletion: true,
+  },
 };
 
 // Student progress tracking for a block

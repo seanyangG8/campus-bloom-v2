@@ -16,6 +16,8 @@ import {
   Send,
   MessageCircle,
   ZoomIn,
+  FileText,
+  Upload,
 } from "lucide-react";
 import {
   Dialog,
@@ -337,6 +339,8 @@ function InteractiveBlock({
           {block.type === 'micro-quiz' && '❓'}{block.type === 'drag-drop-reorder' && '↕️'}
           {block.type === 'whiteboard' && '✏️'}{block.type === 'reflection' && '💭'}
           {block.type === 'qa-thread' && '💬'}{block.type === 'resource' && '📎'}{block.type === 'divider' && '—'}
+          {block.type === 'gap-fill' && '📝'}{block.type === 'poll' && '📊'}
+          {block.type === 'reveal' && '👁️'}{block.type === 'file-upload' && '📤'}
         </span>
         <span className="font-medium text-sm">{block.title}</span>
         {block.isRequired && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">Required</span>}
@@ -353,6 +357,10 @@ function InteractiveBlock({
         {block.type === 'resource' && <ResourceBlockPreview block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
         {block.type === 'qa-thread' && <QAThreadBlockInteractive block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
         {block.type === 'divider' && <DividerBlockPreview block={block} />}
+        {block.type === 'gap-fill' && <GapFillBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
+        {block.type === 'poll' && <PollBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
+        {block.type === 'reveal' && <RevealBlockInteractive block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
+        {block.type === 'file-upload' && <FileUploadBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
       </div>
     </div>
   );
@@ -1082,7 +1090,276 @@ function QAThreadBlockInteractive({ block, onMarkViewed, isComplete }: { block: 
   );
 }
 
-// --- Divider Block ---
+// --- Gap Fill Block ---
+function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [results, setResults] = useState<Record<string, boolean>>({});
+
+  const sentences = block.content?.sentences || [];
+  const allBlanks = sentences.flatMap((s: any) => s.blanks || []);
+
+  const handleSubmit = () => {
+    const res: Record<string, boolean> = {};
+    let correct = 0;
+    allBlanks.forEach((blank: any) => {
+      const userAnswer = (answers[blank.id] || '').trim().toLowerCase();
+      const isCorrect = blank.acceptedAnswers?.some((a: string) => a.trim().toLowerCase() === userAnswer) || false;
+      res[blank.id] = isCorrect;
+      if (isCorrect) correct++;
+    });
+    setResults(res);
+    setSubmitted(true);
+    onMarkViewed();
+  };
+
+  const handleRetry = () => {
+    setAnswers({});
+    setResults({});
+    setSubmitted(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">{block.content?.instruction || 'Fill in the blanks:'}</p>
+      {sentences.map((sentence: any, si: number) => (
+        <div key={sentence.id} className="space-y-2">
+          <p className="text-sm">{sentence.textWithBlanks?.replace(/\{\{\d+\}\}/g, '___')}</p>
+          <div className="flex flex-wrap gap-2">
+            {sentence.blanks?.map((blank: any, bi: number) => (
+              <div key={blank.id} className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground">Blank {bi + 1}:</span>
+                <Input
+                  value={answers[blank.id] || ''}
+                  onChange={(e) => setAnswers({ ...answers, [blank.id]: e.target.value })}
+                  disabled={submitted}
+                  className={cn(
+                    "w-32 h-8 text-sm",
+                    submitted && results[blank.id] && "border-green-500 bg-green-50",
+                    submitted && !results[blank.id] && "border-red-500 bg-red-50"
+                  )}
+                />
+                {submitted && !results[blank.id] && block.content?.showCorrectAfter && (
+                  <span className="text-xs text-muted-foreground">({blank.acceptedAnswers?.[0]})</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {!submitted ? (
+        <Button size="sm" onClick={handleSubmit} disabled={Object.keys(answers).length === 0}>Check Answers</Button>
+      ) : (
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium">
+            {Object.values(results).filter(Boolean).length}/{allBlanks.length} correct
+          </span>
+          <Button size="sm" variant="outline" onClick={handleRetry}>Try Again</Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Poll Block ---
+function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
+  const [selected, setSelected] = useState<number[]>([]);
+  const [voted, setVoted] = useState(false);
+  const [mockResults] = useState(() => {
+    const options = block.content?.options || [];
+    return options.map(() => Math.floor(Math.random() * 20) + 1);
+  });
+
+  const options = block.content?.options || [];
+  const allowMultiple = block.content?.allowMultiple || false;
+
+  const toggleOption = (index: number) => {
+    if (voted) return;
+    if (allowMultiple) {
+      setSelected(prev => prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]);
+    } else {
+      setSelected([index]);
+    }
+  };
+
+  const handleVote = () => {
+    setVoted(true);
+    onMarkViewed();
+  };
+
+  const totalVotes = mockResults.reduce((a: number, b: number) => a + b, 0) + (voted ? 1 : 0);
+
+  return (
+    <div className="space-y-4">
+      <p className="font-medium text-sm">{block.content?.question || 'Poll question'}</p>
+      <div className="space-y-2">
+        {options.map((opt: string, i: number) => {
+          const votes = mockResults[i] + (voted && selected.includes(i) ? 1 : 0);
+          const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+          return (
+            <div
+              key={i}
+              className={cn(
+                "relative p-3 rounded-lg border cursor-pointer transition-all",
+                selected.includes(i) ? "border-primary bg-primary/5" : "hover:bg-muted/50",
+                voted && "cursor-default"
+              )}
+              onClick={() => toggleOption(i)}
+            >
+              {voted && block.content?.showResults !== false && (
+                <div className="absolute inset-0 bg-primary/10 rounded-lg" style={{ width: `${pct}%` }} />
+              )}
+              <div className="relative flex justify-between items-center">
+                <span className="text-sm">{opt}</span>
+                {voted && block.content?.showResults !== false && (
+                  <span className="text-xs font-medium text-muted-foreground">{pct}%</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {!voted ? (
+        <Button size="sm" onClick={handleVote} disabled={selected.length === 0}>Vote</Button>
+      ) : (
+        <p className="text-xs text-muted-foreground">{totalVotes} total votes</p>
+      )}
+    </div>
+  );
+}
+
+// --- Reveal Block ---
+function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Block; onMarkViewed: () => void; isComplete: boolean }) {
+  const sections = block.content?.sections || [];
+  const style = block.content?.style || 'accordion';
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+
+  const toggleSection = (id: string) => {
+    setOpenSections(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        if (!block.content?.allowMultipleOpen && style !== 'tabs') {
+          next.clear();
+        }
+        next.add(id);
+      }
+      // Auto-complete when all sections revealed
+      if (next.size === sections.length && !isComplete) {
+        onMarkViewed();
+      }
+      return next;
+    });
+  };
+
+  if (style === 'tabs') {
+    const activeTab = openSections.size > 0 ? Array.from(openSections)[0] : sections[0]?.id;
+    return (
+      <div className="space-y-3">
+        <div className="flex gap-1 border-b">
+          {sections.map((s: any) => (
+            <button
+              key={s.id}
+              className={cn(
+                "px-3 py-2 text-sm font-medium border-b-2 transition-colors",
+                activeTab === s.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => { setOpenSections(new Set([s.id])); if (!isComplete && sections.length === 1) onMarkViewed(); }}
+            >
+              {s.title}
+            </button>
+          ))}
+        </div>
+        {sections.filter((s: any) => s.id === activeTab).map((s: any) => (
+          <div key={s.id} className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: s.content }} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {sections.map((section: any) => (
+        <div key={section.id} className="border rounded-lg overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between p-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+            onClick={() => toggleSection(section.id)}
+          >
+            {section.title}
+            <ChevronRight className={cn("h-4 w-4 transition-transform", openSections.has(section.id) && "rotate-90")} />
+          </button>
+          {openSections.has(section.id) && (
+            <div className="p-3 pt-0 prose prose-sm max-w-none border-t" dangerouslySetInnerHTML={{ __html: section.content }} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- File Upload Block ---
+function FileUploadBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
+  const [files, setFiles] = useState<string[]>([]);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleFileSelect = () => {
+    // Simulated file selection
+    const fileName = `submission_${Date.now()}.pdf`;
+    setFiles(prev => [...prev, fileName]);
+  };
+
+  const handleSubmit = () => {
+    setSubmitted(true);
+    onMarkViewed();
+    toast.success('Files submitted successfully');
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">{block.content?.prompt || 'Upload your work'}</p>
+      <div className="border-2 border-dashed rounded-lg p-6 text-center">
+        {files.length > 0 ? (
+          <div className="space-y-2">
+            {files.map((f, i) => (
+              <div key={i} className="flex items-center gap-2 justify-center text-sm">
+                <FileText className="h-4 w-4 text-primary" />
+                <span>{f}</span>
+                {!submitted && (
+                  <Button variant="ghost" size="sm" onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground">Drop files here or click to upload</p>
+          </>
+        )}
+        {!submitted && files.length < (block.content?.maxFiles || 1) && (
+          <Button variant="outline" size="sm" className="mt-3" onClick={handleFileSelect}>
+            Select File
+          </Button>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Max {block.content?.maxFileSize || 20}MB • {block.content?.maxFiles || 1} file(s) • 
+        {(block.content?.allowedTypes || []).join(', ')}
+      </p>
+      {files.length > 0 && !submitted && (
+        <Button size="sm" onClick={handleSubmit}>Submit</Button>
+      )}
+      {submitted && (
+        <div className="flex items-center gap-2 text-sm text-green-600">
+          <CheckCircle2 className="h-4 w-4" /> Submitted
+        </div>
+      )}
+    </div>
+  );
+}
 function DividerBlockPreview({ block }: { block: Block }) {
   const style = block.content?.style || 'line';
   const spacing = block.content?.spacing || 'normal';
