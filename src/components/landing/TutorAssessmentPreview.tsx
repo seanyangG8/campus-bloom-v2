@@ -334,7 +334,7 @@ export function TutorAssessmentPreview() {
         /* Cursor appears and moves to center editor - POSITIONED FROM ROOT */
         .tutor-preview-container.animate .anim-cursor {
           opacity: 0;
-          right: 35px;
+          left: calc(100% - 55px);
           top: 125px;
           animation: 
             tutor-cursor-appear 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards,
@@ -345,7 +345,7 @@ export function TutorAssessmentPreview() {
         /* Ghost appears when drag starts - same size as source - POSITIONED FROM ROOT */
         .tutor-preview-container.animate .anim-drag-ghost {
           opacity: 0;
-          right: 35px;
+          left: calc(100% - 55px);
           top: 120px;
           animation: 
             tutor-ghost-appear 0.2s cubic-bezier(0.16, 1, 0.3, 1) 0.9s forwards,
@@ -436,9 +436,9 @@ export function TutorAssessmentPreview() {
         
         /* Cursor moves from right panel to CENTER of editor */
         @keyframes tutor-cursor-move {
-          0% { right: 35px; top: 125px; left: auto; }
-          25% { right: 35px; top: 125px; left: auto; }
-          100% { left: 50%; top: 160px; right: auto; transform: translateX(-50%); }
+          0% { left: calc(100% - 55px); top: 125px; }
+          25% { left: calc(100% - 55px); top: 125px; }
+          100% { left: 50%; top: 160px; transform: translateX(-50%); }
         }
         
         /* Cursor fades out after drag completes */
@@ -454,11 +454,11 @@ export function TutorAssessmentPreview() {
         
         /* Ghost moves to CENTER of editor area */
         @keyframes tutor-ghost-move {
-          0% { right: 35px; top: 120px; left: auto; opacity: 0.95; transform: scale(1); }
-          25% { right: 35px; top: 120px; left: auto; opacity: 0.95; transform: scale(1); }
-          85% { left: 50%; top: 155px; right: auto; opacity: 0.95; transform: scale(1) translateX(-50%); }
-          95% { left: 50%; top: 155px; right: auto; opacity: 0.5; transform: scale(0.95) translateX(-50%); }
-          100% { left: 50%; top: 155px; right: auto; opacity: 0; transform: scale(0.9) translateX(-50%); }
+          0% { left: calc(100% - 55px); top: 120px; opacity: 0.95; transform: scale(1); }
+          25% { left: calc(100% - 55px); top: 120px; opacity: 0.95; transform: scale(1); }
+          85% { left: 50%; top: 155px; opacity: 0.95; transform: scale(1) translateX(-50%); }
+          95% { left: 50%; top: 155px; opacity: 0.5; transform: scale(0.95) translateX(-50%); }
+          100% { left: 50%; top: 155px; opacity: 0; transform: scale(0.9) translateX(-50%); }
         }
         
         @keyframes tutor-drop-zone {
