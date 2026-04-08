@@ -961,6 +961,46 @@ function ReorderBlockEditor({ content, onChange }: { content: any; onChange: (c:
         ))}
       </div>
 
+      {/* Distractor Items */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Distractor Items (don't belong in sequence)</Label>
+          <Button variant="outline" size="sm" onClick={() => {
+            const distractors = content.distractorItems || [];
+            onChange({ ...content, distractorItems: [...distractors, ''] });
+          }}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add Distractor
+          </Button>
+        </div>
+        {(content.distractorItems || []).length > 0 ? (
+          <div className="space-y-2">
+            {(content.distractorItems || []).map((d: string, i: number) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs text-amber-600 w-6">⚠️</span>
+                <Input
+                  value={d}
+                  onChange={(e) => {
+                    const updated = [...(content.distractorItems || [])];
+                    updated[i] = e.target.value;
+                    onChange({ ...content, distractorItems: updated });
+                  }}
+                  placeholder={`Distractor ${i + 1}`}
+                  className="flex-1"
+                />
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
+                  onChange({ ...content, distractorItems: (content.distractorItems || []).filter((_: any, j: number) => j !== i) });
+                }}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No distractors. Add items that don't belong to increase difficulty.</p>
+        )}
+      </div>
+
       <div className="space-y-2">
         <Label>Explanation (shown after attempt)</Label>
         <Textarea
