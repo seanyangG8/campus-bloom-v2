@@ -12,6 +12,7 @@ import { BlockLibrary } from "@/components/course-builder/BlockLibrary";
 import { PageEditor } from "@/components/course-builder/PageEditor";
 import { StudentPreviewDialog } from "@/components/course-builder/StudentPreviewDialog";
 import { PublishDialog } from "@/components/course-builder/PublishDialog";
+import { CourseSettingsDialog } from "@/components/course-builder/CourseSettingsDialog";
 
 export function CourseDetailPage() {
   const { courseId } = useParams();
