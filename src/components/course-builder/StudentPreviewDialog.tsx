@@ -1241,56 +1241,60 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
   );
 }
 
-// --- Resource Block with functional download/open ---
+// --- Resource Block with inline PDF preview + download toast + open tracking ---
 function ResourceBlockPreview({ block, onMarkViewed, isComplete }: { block: Block; onMarkViewed: () => void; isComplete?: boolean }) {
-  const fileTypeIcons: Record<string, string> = {
-    pdf: '📄', doc: '📝', ppt: '📊', xls: '📈', image: '🖼️', zip: '📦', other: '📎',
-  };
+  const [opened, setOpened] = useState(false);
+  const fileTypeIcons: Record<string, string> = { pdf: '📄', doc: '📝', ppt: '📊', xls: '📈', image: '🖼️', zip: '📦', other: '📎' };
   const icon = fileTypeIcons[block.content?.fileType || 'other'] || '📎';
   const isLink = block.content?.resourceType === 'link';
+  const isPdf = block.content?.fileType === 'pdf';
   const url = block.content?.url || block.content?.fileUrl;
 
   const handleClick = () => {
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-    if (block.content?.mustOpenToComplete && !isComplete) {
-      onMarkViewed();
-    }
+    if (url) { window.open(url, '_blank', 'noopener,noreferrer'); toast.success(isLink ? "Link opened" : "Download started"); }
+    setOpened(true);
+    if (block.content?.mustOpenToComplete && !isComplete) onMarkViewed();
     if (!url) toast.info("No URL configured for this resource");
   };
 
   return (
-    <div className="p-4 bg-muted/50 rounded-lg">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">{icon}</span>
-          <div>
-            <p className="text-sm font-medium">{block.content?.fileName || "Resource file"}</p>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {block.content?.fileSize && <span>{block.content.fileSize}</span>}
-              {block.content?.versionLabel && <span>• {block.content.versionLabel}</span>}
+    <div className="space-y-3">
+      <div className="p-4 bg-muted/50 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{icon}</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">{block.content?.fileName || "Resource file"}</p>
+                {opened && <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded">Opened</span>}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {block.content?.fileSize && <span>{block.content.fileSize}</span>}
+                {block.content?.versionLabel && <span>• {block.content.versionLabel}</span>}
+              </div>
             </div>
           </div>
+          <Button variant="outline" size="sm" onClick={handleClick}>
+            {isLink ? (<><ExternalLink className="h-4 w-4 mr-1" />Open</>) : (<><Download className="h-4 w-4 mr-1" />Download</>)}
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={handleClick}>
-          {isLink ? (<><ExternalLink className="h-4 w-4 mr-1" />Open</>) : (<><Download className="h-4 w-4 mr-1" />Download</>)}
-        </Button>
+        {block.content?.expiryDate && (
+          <div className="mt-2 flex items-center gap-1.5 text-xs">
+            <AlertCircle className="h-3 w-3 text-amber-500" />
+            <span className="text-amber-600 dark:text-amber-400">Expires: {new Date(block.content.expiryDate).toLocaleDateString()}</span>
+          </div>
+        )}
       </div>
-      {/* Expiry date display */}
-      {block.content?.expiryDate && (
-        <div className="mt-2 flex items-center gap-1.5 text-xs">
-          <AlertCircle className="h-3 w-3 text-amber-500" />
-          <span className="text-amber-600 dark:text-amber-400">
-            Expires: {new Date(block.content.expiryDate).toLocaleDateString()}
-          </span>
+      {isPdf && url && (
+        <div className="border rounded-lg overflow-hidden">
+          <iframe src={url} className="w-full h-64" title={block.content?.fileName || 'PDF Preview'} />
         </div>
       )}
     </div>
   );
 }
 
-// --- Q&A Thread Interactive with upvoting + anonymous + categories ---
+// --- Q&A Thread with nested replies + edit/delete ---
 function QAThreadBlockInteractive({ block, onMarkViewed, isComplete }: { block: Block; onMarkViewed: () => void; isComplete?: boolean }) {
   const [questions, setQuestions] = useState<{ id: string; text: string; author: string; reply?: string; votes: number; category?: string }[]>([
     { id: 'demo-1', text: 'Can you explain the difference between these two approaches?', author: 'Student A', reply: 'Great question! The first approach is more efficient for large datasets, while the second is simpler to implement.', votes: 3, category: 'Concepts' },
