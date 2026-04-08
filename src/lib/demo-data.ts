@@ -183,6 +183,8 @@ export interface MicroQuizBlockContent {
   allowRetryImmediately?: boolean;
   passMark?: number; // percentage
   completionRule?: 'attempted' | 'passed';
+  showOneAtATime?: boolean;
+  timeLimit?: number; // seconds, 0 = no limit
 }
 
 export interface ReorderBlockContent {
