@@ -183,6 +183,8 @@ export interface MicroQuizBlockContent {
   allowRetryImmediately?: boolean;
   passMark?: number; // percentage
   completionRule?: 'attempted' | 'passed';
+  showOneAtATime?: boolean;
+  timeLimit?: number; // seconds, 0 = no limit
 }
 
 export interface ReorderBlockContent {
@@ -249,6 +251,7 @@ export interface GapFillBlockContent {
   }>;
   showCorrectAfter?: boolean;
   scoringMode?: 'all-or-nothing' | 'partial-credit';
+  mode?: 'text' | 'dropdown'; // text = type answer, dropdown = select from word bank
 }
 
 export interface PollBlockContent {

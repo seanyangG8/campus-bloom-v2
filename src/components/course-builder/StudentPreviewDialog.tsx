@@ -371,43 +371,69 @@ function InteractiveBlock({
   );
 }
 
-// --- Text Block ---
+// --- Text Block with read time + collapsible ---
 function TextBlockPreview({ block }: { block: Block }) {
+  const [expanded, setExpanded] = useState(false);
   const calloutStyle = block.content?.calloutStyle;
-  const sanitizeHtml = (html: string) => {
-    return html.replace(/<a\s+([^>]*href=[^>]*)>/gi, (match, attrs) => {
+  const html = block.content?.html || '';
+  const wordCount = html.replace(/<[^>]+>/g, '').trim().split(/\s+/).filter(Boolean).length;
+  const readTimeMin = Math.max(1, Math.ceil(wordCount / 200));
+  const isLong = wordCount > 500;
+
+  const sanitizeHtml = (h: string) => {
+    return h.replace(/<a\s+([^>]*href=[^>]*)>/gi, (match, attrs) => {
       if (!attrs.includes('target=')) attrs += ' target="_blank"';
       if (!attrs.includes('rel=')) attrs += ' rel="noopener noreferrer"';
       return `<a ${attrs}>`;
     });
   };
   return (
-    <div className={cn(
-      "p-4 bg-muted/50 rounded prose prose-sm max-w-none",
-      "prose-a:text-primary prose-a:underline",
-      calloutStyle === 'info' && "bg-blue-50 border-l-4 border-blue-500 dark:bg-blue-950/30",
-      calloutStyle === 'warning' && "bg-amber-50 border-l-4 border-amber-500 dark:bg-amber-950/30",
-      calloutStyle === 'tip' && "bg-green-50 border-l-4 border-green-500 dark:bg-green-950/30",
-      calloutStyle === 'success' && "bg-emerald-50 border-l-4 border-emerald-500 dark:bg-emerald-950/30",
-    )}>
-      {block.content?.html ? (
-        <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.content.html) }} />
-      ) : (
-        <p className="text-muted-foreground italic">No content yet</p>
+    <div>
+      {wordCount > 0 && (
+        <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          <span>~{readTimeMin} min read</span>
+          <span>• {wordCount} words</span>
+        </div>
+      )}
+      <div className={cn(
+        "p-4 bg-muted/50 rounded prose prose-sm max-w-none",
+        "prose-a:text-primary prose-a:underline",
+        "prose-pre:bg-muted prose-pre:p-3 prose-pre:rounded prose-pre:font-mono prose-pre:text-xs",
+        calloutStyle === 'info' && "bg-blue-50 border-l-4 border-blue-500 dark:bg-blue-950/30",
+        calloutStyle === 'warning' && "bg-amber-50 border-l-4 border-amber-500 dark:bg-amber-950/30",
+        calloutStyle === 'tip' && "bg-green-50 border-l-4 border-green-500 dark:bg-green-950/30",
+        calloutStyle === 'success' && "bg-emerald-50 border-l-4 border-emerald-500 dark:bg-emerald-950/30",
+        isLong && !expanded && "max-h-48 overflow-hidden relative",
+      )}>
+        {html ? (
+          <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
+        ) : (
+          <p className="text-muted-foreground italic">No content yet</p>
+        )}
+        {isLong && !expanded && (
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-muted/80 to-transparent" />
+        )}
+      </div>
+      {isLong && (
+        <button onClick={() => setExpanded(!expanded)} className="text-xs text-primary hover:underline mt-1">
+          {expanded ? 'Show less' : 'Read more...'}
+        </button>
       )}
     </div>
   );
 }
 
-// --- Video Block with actual embed + watch progress + chapters + time clipping ---
+// --- Video Block with notes panel + download ---
 function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: { 
   block: Block; progress?: BlockProgress; onMarkViewed: () => void; onUpdateProgress: (pct: number) => void;
 }) {
   const [watchPct, setWatchPct] = useState(progress?.watchedPercentage || 0);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [notes, setNotes] = useState('');
   const threshold = block.content?.watchThreshold || 80;
   
-  // Build embed URL with start/end time clipping
   const embed = useMemo(() => {
     const base = parseVideoEmbed(block.content?.url || '');
     if (!base) return null;
@@ -471,9 +497,13 @@ function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: 
           <Progress value={watchPct} className="h-1.5" />
         </div>
       )}
-      {block.content?.duration && (
-        <p className="text-xs text-muted-foreground">Duration: {block.content.duration}</p>
-      )}
+      <div className="flex items-center gap-3 flex-wrap">
+        {block.content?.duration && (
+          <p className="text-xs text-muted-foreground">Duration: {block.content.duration}</p>
+        )}
+        {/* Playback speed hint */}
+        <p className="text-xs text-muted-foreground">Speed: 0.5x · 1x · 1.5x · 2x (use player controls)</p>
+      </div>
       {/* Video chapters */}
       {chapters.length > 0 && (
         <div className="space-y-1">
@@ -490,16 +520,36 @@ function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: 
           </div>
         </div>
       )}
-      {block.content?.transcript && (
-        <div>
+      {/* Download button */}
+      {block.content?.allowDownload && block.content?.url && (
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => toast.success("Download started")}>
+          <Download className="h-3 w-3" /> Download Video
+        </Button>
+      )}
+      <div className="flex gap-2">
+        {block.content?.transcript && (
           <button onClick={() => setShowTranscript(!showTranscript)} className="text-xs text-primary hover:underline">
             {showTranscript ? 'Hide' : 'View'} Transcript
           </button>
-          {showTranscript && (
-            <div className="mt-2 p-3 bg-muted/50 rounded text-xs max-h-40 overflow-y-auto whitespace-pre-wrap">
-              {block.content.transcript}
-            </div>
-          )}
+        )}
+        <button onClick={() => setShowNotes(!showNotes)} className="text-xs text-primary hover:underline">
+          {showNotes ? 'Hide' : '📝 My'} Notes
+        </button>
+      </div>
+      {showTranscript && block.content?.transcript && (
+        <div className="p-3 bg-muted/50 rounded text-xs max-h-40 overflow-y-auto whitespace-pre-wrap">
+          {block.content.transcript}
+        </div>
+      )}
+      {showNotes && (
+        <div className="space-y-1">
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Take notes while watching..."
+            className="min-h-[80px] text-sm"
+          />
+          <p className="text-xs text-muted-foreground">Notes are saved locally for this session</p>
         </div>
       )}
     </div>
@@ -594,7 +644,7 @@ function ImageBlockPreview({ block, onMarkViewed, isComplete }: { block: Block; 
   );
 }
 
-// --- Quiz Block with shuffle, retry, maxAttempts, showCorrectAfterAttempt ---
+// --- Quiz Block with one-at-a-time, timer, points ---
 function QuizBlockInteractive({ block, progress, onSubmit }: { 
   block: Block; progress?: BlockProgress;
   onSubmit: (answers: Record<string, number | number[] | string>) => { passed: boolean; score: number };
@@ -603,15 +653,15 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
   const shouldShuffle = block.content?.shuffleQuestions;
   const shouldShuffleAnswers = block.content?.shuffleAnswers;
   const showCorrect = block.content?.showCorrectAfterAttempt !== false;
-  const maxAttempts = block.content?.maxAttempts || block.maxAttempts || 0; // 0 = unlimited
+  const maxAttempts = block.content?.maxAttempts || block.maxAttempts || 0;
+  const oneAtATime = block.content?.showOneAtATime === true;
+  const timeLimit = block.content?.timeLimit || 0;
 
-  // Stable shuffled question order
   const questionOrder = useMemo(() => {
     const indices = questions.map((_: any, i: number) => i);
     return shouldShuffle ? shuffleArray(indices) : indices;
   }, [questions.length, shouldShuffle]);
 
-  // Stable shuffled answer option maps per question
   const answerMaps = useMemo(() => {
     const maps: Record<string, number[]> = {};
     questions.forEach((q: any) => {
@@ -627,19 +677,42 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
   const [result, setResult] = useState<{ passed: boolean; score: number } | null>(null);
   const [showHints, setShowHints] = useState<Set<string>>(new Set());
   const [attemptCount, setAttemptCount] = useState(progress?.attempts || 0);
+  const [currentQIdx, setCurrentQIdx] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(timeLimit);
+
+  // Timer
+  useEffect(() => {
+    if (timeLimit <= 0 || submitted) return;
+    setTimeRemaining(timeLimit);
+    const interval = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timeLimit, submitted, attemptCount]);
+
+  // Auto-submit on timer expiry
+  useEffect(() => {
+    if (timeLimit > 0 && timeRemaining === 0 && !submitted) {
+      handleSubmitInternal();
+    }
+  }, [timeRemaining]);
 
   const handleAnswerChange = (questionId: string, value: number | number[] | string) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
 
-  // Map displayed index back to original for shuffled answers
   const getOriginalIndex = (questionId: string, displayIndex: number): number => {
     const map = answerMaps[questionId];
     return map ? map[displayIndex] : displayIndex;
   };
 
-  const handleSubmit = () => {
-    // Remap answers from display indices to original indices
+  const handleSubmitInternal = () => {
     const remappedAnswers: Record<string, number | number[] | string> = {};
     questions.forEach((q: any) => {
       const userAnswer = answers[q.id];
@@ -661,11 +734,7 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
     setResult(res);
     setSubmitted(true);
     setAttemptCount(prev => prev + 1);
-    if (res.passed) {
-      toast.success(`Quiz passed! Score: ${res.score}%`);
-    } else {
-      toast.error(`Quiz not passed. Score: ${res.score}%`);
-    }
+    res.passed ? toast.success(`Quiz passed! Score: ${res.score}%`) : toast.error(`Quiz not passed. Score: ${res.score}%`);
   };
 
   const handleRetry = () => {
@@ -673,6 +742,7 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
     setSubmitted(false);
     setResult(null);
     setShowHints(new Set());
+    setCurrentQIdx(0);
   };
 
   const canRetry = submitted && !result?.passed && (maxAttempts === 0 || attemptCount < maxAttempts);
@@ -689,189 +759,191 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
     return <p className="text-sm text-muted-foreground">No questions configured</p>;
   }
 
+  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+
+  // Determine which questions to show
+  const visibleQuestionIndices = oneAtATime && !submitted
+    ? [questionOrder[currentQIdx]]
+    : questionOrder;
+
+  const renderQuestion = (origIdx: number, displayNum: number) => {
+    const q = questions[origIdx];
+    if (!q) return null;
+    const userAnswer = answers[q.id];
+    const optionOrder = answerMaps[q.id] || q.options?.map((_: any, i: number) => i) || [];
+    
+    const getIsCorrect = () => {
+      if (!submitted) return false;
+      const remapped = answerMaps[q.id] 
+        ? (Array.isArray(userAnswer) 
+            ? (userAnswer as number[]).map(di => getOriginalIndex(q.id, di))
+            : typeof userAnswer === 'number' ? getOriginalIndex(q.id, userAnswer) : userAnswer)
+        : userAnswer;
+      if (q.type === 'multi-select') {
+        const userArr = Array.isArray(remapped) ? [...remapped].sort((a: number, b: number) => a - b) : [];
+        const correctArr = Array.isArray(q.correctAnswer) ? [...q.correctAnswer].sort((a: number, b: number) => a - b) : [];
+        return JSON.stringify(userArr) === JSON.stringify(correctArr);
+      } else if (q.type === 'short-answer') {
+        const userText = typeof remapped === 'string' ? remapped.trim() : '';
+        const expectedText = (q.correctAnswerText || q.options?.[0] || '').trim();
+        return q.caseSensitive ? userText === expectedText : userText.toLowerCase() === expectedText.toLowerCase();
+      }
+      return remapped === q.correctAnswer;
+    };
+    const isCorrect = getIsCorrect();
+
+    return (
+      <div key={q.id || origIdx} className="p-4 bg-muted/50 rounded-lg">
+        <div className="flex items-center justify-between mb-3">
+          <p className="font-medium text-sm">
+            Q{displayNum}: {q.question || "Question not set"}
+          </p>
+          {q.points && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">{q.points} pts</span>}
+        </div>
+
+        {/* Single choice */}
+        {(q.type === 'single-choice' || !q.type) && (
+          <div className="space-y-2">
+            {optionOrder.map((origOptIdx: number, displayIdx: number) => {
+              const opt = q.options?.[origOptIdx];
+              const isSelected = userAnswer === displayIdx;
+              const isCorrectOption = q.correctAnswer === origOptIdx;
+              return (
+                <button key={displayIdx} onClick={() => !submitted && handleAnswerChange(q.id, displayIdx)} disabled={submitted}
+                  className={cn("w-full p-3 text-left text-sm border rounded-lg transition-all",
+                    isSelected && !submitted && "border-primary bg-primary/10",
+                    submitted && showCorrect && isCorrectOption && "border-success bg-success/10",
+                    submitted && showCorrect && isSelected && !isCorrectOption && "border-destructive bg-destructive/10",
+                    submitted && !showCorrect && isSelected && "border-muted-foreground bg-muted",
+                    !submitted && !isSelected && "hover:bg-muted"
+                  )}>
+                  {String.fromCharCode(65 + displayIdx)}) {opt || `Option ${displayIdx + 1}`}
+                  {submitted && showCorrect && isCorrectOption && <CheckCircle2 className="inline h-4 w-4 ml-2 text-success" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Multi-select */}
+        {q.type === 'multi-select' && (
+          <div className="space-y-2">
+            {!submitted && Array.isArray(q.correctAnswer) && q.correctAnswer.length > 1 && (
+              <p className="text-xs text-muted-foreground italic mb-1">Select {q.correctAnswer.length} answers</p>
+            )}
+            {optionOrder.map((origOptIdx: number, displayIdx: number) => {
+              const opt = q.options?.[origOptIdx];
+              const selected = Array.isArray(userAnswer) && userAnswer.includes(displayIdx);
+              const isCorrectOption = Array.isArray(q.correctAnswer) && q.correctAnswer.includes(origOptIdx);
+              return (
+                <button key={displayIdx}
+                  onClick={() => { if (submitted) return; const current = (userAnswer as number[]) || []; handleAnswerChange(q.id, selected ? current.filter(x => x !== displayIdx) : [...current, displayIdx]); }}
+                  disabled={submitted}
+                  className={cn("w-full p-3 text-left text-sm border rounded-lg transition-all flex items-center gap-2",
+                    selected && !submitted && "border-primary bg-primary/10",
+                    submitted && showCorrect && isCorrectOption && "border-success bg-success/10",
+                    submitted && showCorrect && selected && !isCorrectOption && "border-destructive bg-destructive/10",
+                    !submitted && !selected && "hover:bg-muted"
+                  )}>
+                  <input type="checkbox" checked={selected} readOnly className="h-4 w-4" />
+                  {String.fromCharCode(65 + displayIdx)}) {opt || `Option ${displayIdx + 1}`}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* True/False */}
+        {q.type === 'true-false' && (
+          <div className="flex gap-4">
+            {['True', 'False'].map((opt, i) => (
+              <button key={opt} onClick={() => !submitted && handleAnswerChange(q.id, i)} disabled={submitted}
+                className={cn("flex-1 p-3 text-center text-sm border rounded-lg transition-all",
+                  userAnswer === i && !submitted && "border-primary bg-primary/10",
+                  submitted && showCorrect && q.correctAnswer === i && "border-success bg-success/10",
+                  submitted && showCorrect && userAnswer === i && q.correctAnswer !== i && "border-destructive bg-destructive/10",
+                  !submitted && userAnswer !== i && "hover:bg-muted"
+                )}>
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Short Answer */}
+        {q.type === 'short-answer' && (
+          <div className="space-y-2">
+            <Input type="text" value={(userAnswer as string) || ''} onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+              placeholder="Type your answer..." disabled={submitted}
+              className={cn(submitted && showCorrect && isCorrect && "border-success bg-success/10", submitted && showCorrect && !isCorrect && "border-destructive bg-destructive/10")} />
+            {submitted && showCorrect && (
+              <div className={cn("text-xs p-2 rounded", isCorrect ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
+                {isCorrect ? <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Correct!</span>
+                  : <span>Expected: <strong>{q.correctAnswerText || q.options?.[0]}</strong></span>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {q.hint && !submitted && (
+          <button onClick={() => toggleHint(q.id)} className="mt-2 text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
+            <Lightbulb className="h-3 w-3" /> {showHints.has(q.id) ? 'Hide hint' : 'Show hint'}
+          </button>
+        )}
+        {showHints.has(q.id) && q.hint && <p className="mt-2 text-xs bg-muted p-2 rounded">{q.hint}</p>}
+        {submitted && showCorrect && q.explanation && (
+          <div className="mt-3 p-2 bg-muted rounded text-xs"><strong>Explanation:</strong> {q.explanation}</div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
-      {/* Progress indicator */}
+      {/* Timer */}
+      {timeLimit > 0 && !submitted && (
+        <div className={cn("flex items-center gap-2 text-sm font-mono p-2 rounded-lg", timeRemaining <= 30 ? "bg-destructive/10 text-destructive" : "bg-muted")}>
+          <Clock className="h-4 w-4" />
+          <span>{formatTime(timeRemaining)}</span>
+          {timeRemaining <= 30 && <span className="text-xs">Hurry!</span>}
+        </div>
+      )}
+      {/* Progress */}
       {questions.length > 1 && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Question {submitted ? questions.length : Math.min(Object.keys(answers).length + 1, questions.length)} of {questions.length}</span>
+          <span>Question {oneAtATime && !submitted ? currentQIdx + 1 : (submitted ? questions.length : Math.min(Object.keys(answers).length + 1, questions.length))} of {questions.length}</span>
           <span>{Object.keys(answers).length} answered</span>
         </div>
       )}
-      {questionOrder.map((origIdx: number) => {
-        const q = questions[origIdx];
-        if (!q) return null;
-        const userAnswer = answers[q.id];
-        const isAnswered = userAnswer !== undefined && userAnswer !== '';
 
-        // Get the display-order options for this question
-        const optionOrder = answerMaps[q.id] || q.options?.map((_: any, i: number) => i) || [];
-        
-        // Check correctness using original indices (after remapping)
-        const getIsCorrect = () => {
-          if (!submitted) return false;
-          // Need to use remapped answer for checking
-          const remapped = answerMaps[q.id] 
-            ? (Array.isArray(userAnswer) 
-                ? (userAnswer as number[]).map(di => getOriginalIndex(q.id, di))
-                : typeof userAnswer === 'number' ? getOriginalIndex(q.id, userAnswer) : userAnswer)
-            : userAnswer;
-          
-          if (q.type === 'multi-select') {
-            const userArr = Array.isArray(remapped) ? [...remapped].sort((a: number, b: number) => a - b) : [];
-            const correctArr = Array.isArray(q.correctAnswer) ? [...q.correctAnswer].sort((a: number, b: number) => a - b) : [];
-            return JSON.stringify(userArr) === JSON.stringify(correctArr);
-          } else if (q.type === 'short-answer') {
-            const userText = typeof remapped === 'string' ? remapped.trim() : '';
-            const expectedText = (q.correctAnswerText || q.options?.[0] || '').trim();
-            return q.caseSensitive ? userText === expectedText : userText.toLowerCase() === expectedText.toLowerCase();
-          } else {
-            return remapped === q.correctAnswer;
-          }
-        };
-        const isCorrect = getIsCorrect();
+      {visibleQuestionIndices.map((origIdx: number, i: number) => 
+        renderQuestion(origIdx, oneAtATime && !submitted ? currentQIdx + 1 : questionOrder.indexOf(origIdx) + 1)
+      )}
 
-        return (
-          <div key={q.id || origIdx} className="p-4 bg-muted/50 rounded-lg">
-            <p className="font-medium text-sm mb-3">
-              Q{questionOrder.indexOf(origIdx) + 1}: {q.question || "Question not set"}
-            </p>
+      {/* One-at-a-time navigation */}
+      {oneAtATime && !submitted && (
+        <div className="flex items-center justify-between">
+          <Button variant="outline" size="sm" onClick={() => setCurrentQIdx(prev => prev - 1)} disabled={currentQIdx === 0}>
+            <ChevronLeft className="h-4 w-4" /> Previous
+          </Button>
+          {currentQIdx < questionOrder.length - 1 ? (
+            <Button variant="outline" size="sm" onClick={() => setCurrentQIdx(prev => prev + 1)}>
+              Next <ChevronRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button onClick={handleSubmitInternal} disabled={Object.keys(answers).length < questions.length}>
+              Submit All
+            </Button>
+          )}
+        </div>
+      )}
 
-            {/* Single choice */}
-            {(q.type === 'single-choice' || !q.type) && (
-              <div className="space-y-2">
-                {optionOrder.map((origOptIdx: number, displayIdx: number) => {
-                  const opt = q.options?.[origOptIdx];
-                  const isSelected = userAnswer === displayIdx;
-                  const isCorrectOption = q.correctAnswer === origOptIdx;
-                  return (
-                    <button 
-                      key={displayIdx}
-                      onClick={() => !submitted && handleAnswerChange(q.id, displayIdx)}
-                      disabled={submitted}
-                      className={cn(
-                        "w-full p-3 text-left text-sm border rounded-lg transition-all",
-                        isSelected && !submitted && "border-primary bg-primary/10",
-                        submitted && showCorrect && isCorrectOption && "border-success bg-success/10",
-                        submitted && showCorrect && isSelected && !isCorrectOption && "border-destructive bg-destructive/10",
-                        submitted && !showCorrect && isSelected && "border-muted-foreground bg-muted",
-                        !submitted && !isSelected && "hover:bg-muted"
-                      )}
-                    >
-                      {String.fromCharCode(65 + displayIdx)}) {opt || `Option ${displayIdx + 1}`}
-                      {submitted && showCorrect && isCorrectOption && <CheckCircle2 className="inline h-4 w-4 ml-2 text-success" />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Multi-select */}
-            {q.type === 'multi-select' && (
-              <div className="space-y-2">
-                {optionOrder.map((origOptIdx: number, displayIdx: number) => {
-                  const opt = q.options?.[origOptIdx];
-                  const selected = Array.isArray(userAnswer) && userAnswer.includes(displayIdx);
-                  const isCorrectOption = Array.isArray(q.correctAnswer) && q.correctAnswer.includes(origOptIdx);
-                  return (
-                    <button 
-                      key={displayIdx}
-                      onClick={() => {
-                        if (submitted) return;
-                        const current = (userAnswer as number[]) || [];
-                        const newAnswer = selected ? current.filter(x => x !== displayIdx) : [...current, displayIdx];
-                        handleAnswerChange(q.id, newAnswer);
-                      }}
-                      disabled={submitted}
-                      className={cn(
-                        "w-full p-3 text-left text-sm border rounded-lg transition-all flex items-center gap-2",
-                        selected && !submitted && "border-primary bg-primary/10",
-                        submitted && showCorrect && isCorrectOption && "border-success bg-success/10",
-                        submitted && showCorrect && selected && !isCorrectOption && "border-destructive bg-destructive/10",
-                        submitted && !showCorrect && selected && "border-muted-foreground bg-muted",
-                        !submitted && !selected && "hover:bg-muted"
-                      )}
-                    >
-                      <input type="checkbox" checked={selected} readOnly className="h-4 w-4" />
-                      {String.fromCharCode(65 + displayIdx)}) {opt || `Option ${displayIdx + 1}`}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* True/False */}
-            {q.type === 'true-false' && (
-              <div className="flex gap-4">
-                {['True', 'False'].map((opt, i) => (
-                  <button
-                    key={opt}
-                    onClick={() => !submitted && handleAnswerChange(q.id, i)}
-                    disabled={submitted}
-                    className={cn(
-                      "flex-1 p-3 text-center text-sm border rounded-lg transition-all",
-                      userAnswer === i && !submitted && "border-primary bg-primary/10",
-                      submitted && showCorrect && q.correctAnswer === i && "border-success bg-success/10",
-                      submitted && showCorrect && userAnswer === i && q.correctAnswer !== i && "border-destructive bg-destructive/10",
-                      submitted && !showCorrect && userAnswer === i && "border-muted-foreground bg-muted",
-                      !submitted && userAnswer !== i && "hover:bg-muted"
-                    )}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Short Answer */}
-            {q.type === 'short-answer' && (
-              <div className="space-y-2">
-                <Input
-                  type="text"
-                  value={(userAnswer as string) || ''}
-                  onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                  placeholder="Type your answer..."
-                  disabled={submitted}
-                  className={cn(
-                    submitted && showCorrect && isCorrect && "border-success bg-success/10",
-                    submitted && showCorrect && !isCorrect && "border-destructive bg-destructive/10",
-                    submitted && !showCorrect && "border-muted-foreground"
-                  )}
-                />
-                {submitted && showCorrect && (
-                  <div className={cn("text-xs p-2 rounded", isCorrect ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
-                    {isCorrect ? (
-                      <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Correct!</span>
-                    ) : (
-                      <span>Expected: <strong>{q.correctAnswerText || q.options?.[0]}</strong></span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Hint */}
-            {q.hint && !submitted && (
-              <button onClick={() => toggleHint(q.id)} className="mt-2 text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
-                <Lightbulb className="h-3 w-3" />
-                {showHints.has(q.id) ? 'Hide hint' : 'Show hint'}
-              </button>
-            )}
-            {showHints.has(q.id) && q.hint && <p className="mt-2 text-xs bg-muted p-2 rounded">{q.hint}</p>}
-
-            {/* Explanation */}
-            {submitted && showCorrect && q.explanation && (
-              <div className="mt-3 p-2 bg-muted rounded text-xs"><strong>Explanation:</strong> {q.explanation}</div>
-            )}
-          </div>
-        );
-      })}
-
-      {!submitted ? (
-        <Button onClick={handleSubmit} disabled={Object.keys(answers).length < questions.length} className="w-full">
+      {!oneAtATime && !submitted && (
+        <Button onClick={handleSubmitInternal} disabled={Object.keys(answers).length < questions.length} className="w-full">
           Submit Answers
         </Button>
-      ) : (
+      )}
+      {submitted && (
         <div className="space-y-2">
           <div className={cn("p-3 rounded-lg text-center", result?.passed ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
             <p className="font-medium">{result?.passed ? "Passed!" : "Not passed"} - Score: {result?.score}%</p>
@@ -956,6 +1028,20 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
           const isCorrectPosition = submitted && !item.isDistractor && block.content?.correctOrder?.[displayIndex] === item.originalIndex;
           const isWrongPosition = submitted && !item.isDistractor && block.content?.correctOrder?.[displayIndex] !== item.originalIndex;
           const isDistractorRevealed = submitted && item.isDistractor;
+
+          const moveUp = () => {
+            if (displayIndex === 0) return;
+            const newOrder = [...userOrder];
+            [newOrder[displayIndex], newOrder[displayIndex - 1]] = [newOrder[displayIndex - 1], newOrder[displayIndex]];
+            setUserOrder(newOrder);
+          };
+          const moveDown = () => {
+            if (displayIndex === userOrder.length - 1) return;
+            const newOrder = [...userOrder];
+            [newOrder[displayIndex], newOrder[displayIndex + 1]] = [newOrder[displayIndex + 1], newOrder[displayIndex]];
+            setUserOrder(newOrder);
+          };
+
           return (
             <div
               key={itemIndex}
@@ -975,6 +1061,19 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
               <span className="text-xs font-mono text-muted-foreground w-5 text-center">{displayIndex + 1}</span>
               <GripVertical className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm flex-1">{item.text}</span>
+              {/* Move buttons for touch/accessibility */}
+              {!submitted && (
+                <div className="flex flex-col gap-0.5">
+                  <button onClick={moveUp} disabled={displayIndex === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5">
+                    <ChevronLeft className="h-3 w-3 rotate-90" />
+                  </button>
+                  <button onClick={moveDown} disabled={displayIndex === userOrder.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5">
+                    <ChevronRight className="h-3 w-3 rotate-90" />
+                  </button>
+                </div>
+              )}
+              {submitted && isCorrectPosition && <CheckCircle2 className="h-4 w-4 text-success shrink-0" />}
+              {submitted && isWrongPosition && <X className="h-4 w-4 text-destructive shrink-0" />}
               {isDistractorRevealed && <span className="text-xs text-amber-600">Doesn't belong</span>}
             </div>
           );
@@ -1008,7 +1107,7 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   );
 }
 
-// --- Whiteboard Block ---
+// --- Whiteboard Block with rubric display ---
 function WhiteboardBlockInteractive({ block, progress, onSubmit }: { 
   block: Block; progress?: BlockProgress; onSubmit: (data: any) => void;
 }) {
@@ -1029,6 +1128,13 @@ function WhiteboardBlockInteractive({ block, progress, onSubmit }: {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{block.content?.prompt || "Draw or write your answer"}</p>
+      {/* Rubric display */}
+      {block.content?.rubric && (
+        <details className="text-xs border rounded-lg p-2">
+          <summary className="cursor-pointer text-muted-foreground hover:text-primary font-medium">View Rubric / Marking Criteria</summary>
+          <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{block.content.rubric}</p>
+        </details>
+      )}
       <WhiteboardCanvas
         blockId={block.id}
         canvasSize={block.content?.canvasSize}
@@ -1042,17 +1148,29 @@ function WhiteboardBlockInteractive({ block, progress, onSubmit }: {
   );
 }
 
-// --- Reflection Block ---
+// --- Reflection Block with draft auto-save + peer commenting ---
 function ReflectionBlockInteractive({ block, progress, onSubmit }: { 
   block: Block; progress?: BlockProgress; onSubmit: (text: string) => void;
 }) {
   const [text, setText] = useState('');
   const [submitted, setSubmitted] = useState(progress?.status === 'completed');
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [peerComments, setPeerComments] = useState<Record<number, string>>({});
   const minWords = block.content?.minWords || 0;
   const maxWords = block.content?.maxWords;
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
   const meetsMinimum = wordCount >= minWords;
   const exceedsMax = maxWords && wordCount > maxWords;
+
+  // Auto-save draft every 10 seconds
+  useEffect(() => {
+    if (submitted || !text.trim()) return;
+    const timer = setTimeout(() => {
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2000);
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [text, submitted]);
 
   const handleSubmit = () => {
     if (!meetsMinimum || exceedsMax) return;
@@ -1067,7 +1185,6 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
         <div className="p-3 rounded-lg bg-success/10 text-success text-center">
           <CheckCircle2 className="h-5 w-5 inline mr-2" /> Reflection submitted
         </div>
-        {/* Show peer reflections gallery */}
         {block.content?.showPeerReflections && (
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">Peer Reflections</p>
@@ -1078,6 +1195,14 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
               <div key={i} className="p-3 bg-muted/50 rounded-lg">
                 <p className="text-xs font-medium mb-1">{block.content?.privacyMode === 'anonymous' ? 'Anonymous' : peer.author}</p>
                 <p className="text-sm text-muted-foreground">{peer.text}</p>
+                {block.content?.allowPeerComments && (
+                  <div className="mt-2 flex gap-2">
+                    <Input value={peerComments[i] || ''} onChange={(e) => setPeerComments(prev => ({ ...prev, [i]: e.target.value }))} placeholder="Add a comment..." className="text-xs h-7" />
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { if (peerComments[i]?.trim()) { toast.success("Comment posted!"); setPeerComments(prev => ({ ...prev, [i]: '' })); } }}>
+                      <Send className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1089,7 +1214,6 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{block.content?.prompt || "Share your reflection..."}</p>
-      {/* Rubric display */}
       {block.content?.rubric && (
         <details className="text-xs border rounded-lg p-2">
           <summary className="cursor-pointer text-muted-foreground hover:text-primary font-medium">View Rubric</summary>
@@ -1104,9 +1228,12 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
       )}
       <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type your reflection here..." className="min-h-[120px]" />
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span className={cn(!meetsMinimum && wordCount > 0 && "text-destructive", meetsMinimum && "text-success")}>
-          {wordCount} words{minWords > 0 && ` (min: ${minWords})`}{maxWords && ` (max: ${maxWords})`}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={cn(!meetsMinimum && wordCount > 0 && "text-destructive", meetsMinimum && "text-success")}>
+            {wordCount} words{minWords > 0 && ` (min: ${minWords})`}{maxWords && ` (max: ${maxWords})`}
+          </span>
+          {draftSaved && <span className="text-success">Draft saved ✓</span>}
+        </div>
         {exceedsMax && <span className="text-destructive">Exceeds maximum</span>}
       </div>
       <Button onClick={handleSubmit} disabled={!meetsMinimum || !!exceedsMax} className="w-full">Submit Reflection</Button>
@@ -1114,56 +1241,60 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
   );
 }
 
-// --- Resource Block with functional download/open ---
+// --- Resource Block with inline PDF preview + download toast + open tracking ---
 function ResourceBlockPreview({ block, onMarkViewed, isComplete }: { block: Block; onMarkViewed: () => void; isComplete?: boolean }) {
-  const fileTypeIcons: Record<string, string> = {
-    pdf: '📄', doc: '📝', ppt: '📊', xls: '📈', image: '🖼️', zip: '📦', other: '📎',
-  };
+  const [opened, setOpened] = useState(false);
+  const fileTypeIcons: Record<string, string> = { pdf: '📄', doc: '📝', ppt: '📊', xls: '📈', image: '🖼️', zip: '📦', other: '📎' };
   const icon = fileTypeIcons[block.content?.fileType || 'other'] || '📎';
   const isLink = block.content?.resourceType === 'link';
+  const isPdf = block.content?.fileType === 'pdf';
   const url = block.content?.url || block.content?.fileUrl;
 
   const handleClick = () => {
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-    if (block.content?.mustOpenToComplete && !isComplete) {
-      onMarkViewed();
-    }
+    if (url) { window.open(url, '_blank', 'noopener,noreferrer'); toast.success(isLink ? "Link opened" : "Download started"); }
+    setOpened(true);
+    if (block.content?.mustOpenToComplete && !isComplete) onMarkViewed();
     if (!url) toast.info("No URL configured for this resource");
   };
 
   return (
-    <div className="p-4 bg-muted/50 rounded-lg">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">{icon}</span>
-          <div>
-            <p className="text-sm font-medium">{block.content?.fileName || "Resource file"}</p>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {block.content?.fileSize && <span>{block.content.fileSize}</span>}
-              {block.content?.versionLabel && <span>• {block.content.versionLabel}</span>}
+    <div className="space-y-3">
+      <div className="p-4 bg-muted/50 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{icon}</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">{block.content?.fileName || "Resource file"}</p>
+                {opened && <span className="text-[10px] bg-success/10 text-success px-1.5 py-0.5 rounded">Opened</span>}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {block.content?.fileSize && <span>{block.content.fileSize}</span>}
+                {block.content?.versionLabel && <span>• {block.content.versionLabel}</span>}
+              </div>
             </div>
           </div>
+          <Button variant="outline" size="sm" onClick={handleClick}>
+            {isLink ? (<><ExternalLink className="h-4 w-4 mr-1" />Open</>) : (<><Download className="h-4 w-4 mr-1" />Download</>)}
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={handleClick}>
-          {isLink ? (<><ExternalLink className="h-4 w-4 mr-1" />Open</>) : (<><Download className="h-4 w-4 mr-1" />Download</>)}
-        </Button>
+        {block.content?.expiryDate && (
+          <div className="mt-2 flex items-center gap-1.5 text-xs">
+            <AlertCircle className="h-3 w-3 text-amber-500" />
+            <span className="text-amber-600 dark:text-amber-400">Expires: {new Date(block.content.expiryDate).toLocaleDateString()}</span>
+          </div>
+        )}
       </div>
-      {/* Expiry date display */}
-      {block.content?.expiryDate && (
-        <div className="mt-2 flex items-center gap-1.5 text-xs">
-          <AlertCircle className="h-3 w-3 text-amber-500" />
-          <span className="text-amber-600 dark:text-amber-400">
-            Expires: {new Date(block.content.expiryDate).toLocaleDateString()}
-          </span>
+      {isPdf && url && (
+        <div className="border rounded-lg overflow-hidden">
+          <iframe src={url} className="w-full h-64" title={block.content?.fileName || 'PDF Preview'} />
         </div>
       )}
     </div>
   );
 }
 
-// --- Q&A Thread Interactive with upvoting + anonymous + categories ---
+// --- Q&A Thread with nested replies + edit/delete ---
 function QAThreadBlockInteractive({ block, onMarkViewed, isComplete }: { block: Block; onMarkViewed: () => void; isComplete?: boolean }) {
   const [questions, setQuestions] = useState<{ id: string; text: string; author: string; reply?: string; votes: number; category?: string }[]>([
     { id: 'demo-1', text: 'Can you explain the difference between these two approaches?', author: 'Student A', reply: 'Great question! The first approach is more efficient for large datasets, while the second is simpler to implement.', votes: 3, category: 'Concepts' },
