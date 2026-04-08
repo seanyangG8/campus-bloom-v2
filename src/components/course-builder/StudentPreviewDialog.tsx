@@ -371,29 +371,54 @@ function InteractiveBlock({
   );
 }
 
-// --- Text Block ---
+// --- Text Block with read time + collapsible ---
 function TextBlockPreview({ block }: { block: Block }) {
+  const [expanded, setExpanded] = useState(false);
   const calloutStyle = block.content?.calloutStyle;
-  const sanitizeHtml = (html: string) => {
-    return html.replace(/<a\s+([^>]*href=[^>]*)>/gi, (match, attrs) => {
+  const html = block.content?.html || '';
+  const wordCount = html.replace(/<[^>]+>/g, '').trim().split(/\s+/).filter(Boolean).length;
+  const readTimeMin = Math.max(1, Math.ceil(wordCount / 200));
+  const isLong = wordCount > 500;
+
+  const sanitizeHtml = (h: string) => {
+    return h.replace(/<a\s+([^>]*href=[^>]*)>/gi, (match, attrs) => {
       if (!attrs.includes('target=')) attrs += ' target="_blank"';
       if (!attrs.includes('rel=')) attrs += ' rel="noopener noreferrer"';
       return `<a ${attrs}>`;
     });
   };
   return (
-    <div className={cn(
-      "p-4 bg-muted/50 rounded prose prose-sm max-w-none",
-      "prose-a:text-primary prose-a:underline",
-      calloutStyle === 'info' && "bg-blue-50 border-l-4 border-blue-500 dark:bg-blue-950/30",
-      calloutStyle === 'warning' && "bg-amber-50 border-l-4 border-amber-500 dark:bg-amber-950/30",
-      calloutStyle === 'tip' && "bg-green-50 border-l-4 border-green-500 dark:bg-green-950/30",
-      calloutStyle === 'success' && "bg-emerald-50 border-l-4 border-emerald-500 dark:bg-emerald-950/30",
-    )}>
-      {block.content?.html ? (
-        <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.content.html) }} />
-      ) : (
-        <p className="text-muted-foreground italic">No content yet</p>
+    <div>
+      {wordCount > 0 && (
+        <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          <span>~{readTimeMin} min read</span>
+          <span>• {wordCount} words</span>
+        </div>
+      )}
+      <div className={cn(
+        "p-4 bg-muted/50 rounded prose prose-sm max-w-none",
+        "prose-a:text-primary prose-a:underline",
+        "prose-pre:bg-muted prose-pre:p-3 prose-pre:rounded prose-pre:font-mono prose-pre:text-xs",
+        calloutStyle === 'info' && "bg-blue-50 border-l-4 border-blue-500 dark:bg-blue-950/30",
+        calloutStyle === 'warning' && "bg-amber-50 border-l-4 border-amber-500 dark:bg-amber-950/30",
+        calloutStyle === 'tip' && "bg-green-50 border-l-4 border-green-500 dark:bg-green-950/30",
+        calloutStyle === 'success' && "bg-emerald-50 border-l-4 border-emerald-500 dark:bg-emerald-950/30",
+        isLong && !expanded && "max-h-48 overflow-hidden relative",
+      )}>
+        {html ? (
+          <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
+        ) : (
+          <p className="text-muted-foreground italic">No content yet</p>
+        )}
+        {isLong && !expanded && (
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-muted/80 to-transparent" />
+        )}
+      </div>
+      {isLong && (
+        <button onClick={() => setExpanded(!expanded)} className="text-xs text-primary hover:underline mt-1">
+          {expanded ? 'Show less' : 'Read more...'}
+        </button>
       )}
     </div>
   );
