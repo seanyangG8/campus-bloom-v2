@@ -16,6 +16,8 @@ import {
   Send,
   MessageCircle,
   ZoomIn,
+  FileText,
+  Upload,
 } from "lucide-react";
 import {
   Dialog,
