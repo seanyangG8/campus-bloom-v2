@@ -1367,6 +1367,10 @@ function getBlockTypeLabel(type: BlockType): string {
     "qa-thread": "Q&A Thread",
     resource: "Resource",
     divider: "Divider",
+    "gap-fill": "Gap Fill",
+    poll: "Poll",
+    reveal: "Reveal",
+    "file-upload": "File Upload",
   };
   return labels[type] || "Block";
 }
