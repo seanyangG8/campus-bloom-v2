@@ -738,13 +738,42 @@ function MicroQuizEditor({ content, onChange }: { content: any; onChange: (c: an
                     placeholder={`Option ${String.fromCharCode(65 + optIndex)}`}
                     className="flex-1"
                   />
+                  {q.options.length > 2 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => {
+                        const newOptions = q.options.filter((_: any, i: number) => i !== optIndex);
+                        // Adjust correctAnswer if needed
+                        let newCorrect = q.correctAnswer;
+                        if (q.type === 'multi-select' && Array.isArray(newCorrect)) {
+                          newCorrect = newCorrect.filter((i: number) => i !== optIndex).map((i: number) => i > optIndex ? i - 1 : i);
+                        } else if (typeof newCorrect === 'number' && newCorrect >= optIndex) {
+                          newCorrect = Math.max(0, newCorrect > optIndex ? newCorrect - 1 : 0);
+                        }
+                        updateQuestion(qIndex, { options: newOptions, correctAnswer: newCorrect });
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))}
-              <p className="text-xs text-muted-foreground">
-                {q.type === 'multi-select' 
-                  ? 'Check all correct answers.' 
-                  : 'Select the radio button next to the correct answer.'}
-              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateQuestion(qIndex, { options: [...q.options, ''] })}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add Option
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {q.type === 'multi-select' 
+                    ? 'Check all correct answers.' 
+                    : 'Select the radio button next to the correct answer.'}
+                </p>
+              </div>
             </div>
           )}
 
