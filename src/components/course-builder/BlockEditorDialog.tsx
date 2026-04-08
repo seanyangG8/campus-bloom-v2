@@ -76,7 +76,7 @@ export function BlockEditorDialog({ block, open, onOpenChange }: BlockEditorDial
 
   if (!block) return null;
 
-  const hasAdvancedSettings = ['micro-quiz', 'drag-drop-reorder', 'whiteboard', 'reflection'].includes(block.type);
+  const hasAdvancedSettings = ['micro-quiz', 'drag-drop-reorder', 'whiteboard', 'reflection', 'gap-fill', 'file-upload'].includes(block.type);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -136,6 +136,18 @@ export function BlockEditorDialog({ block, open, onOpenChange }: BlockEditorDial
             )}
             {block.type === "qa-thread" && (
               <QAThreadBlockEditor content={content} onChange={setContent} />
+            )}
+            {block.type === "gap-fill" && (
+              <GapFillBlockEditor content={content} onChange={setContent} />
+            )}
+            {block.type === "poll" && (
+              <PollBlockEditor content={content} onChange={setContent} />
+            )}
+            {block.type === "reveal" && (
+              <RevealBlockEditor content={content} onChange={setContent} />
+            )}
+            {block.type === "file-upload" && (
+              <FileUploadBlockEditor content={content} onChange={setContent} />
             )}
           </TabsContent>
 
