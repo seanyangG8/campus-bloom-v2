@@ -120,11 +120,22 @@ export function AssessmentPreviewDialog({
     setCurrentIndex(0);
     setAnswers({});
     setShowResults(false);
+    if (assessment?.duration && assessment.duration > 0) {
+      setTimeRemaining(assessment.duration * 60);
+      setTimerActive(true);
+    }
   };
 
   const handleClose = () => {
     handleReset();
+    setTimerActive(false);
     onOpenChange(false);
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   if (!assessment || questions.length === 0) {
