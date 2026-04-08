@@ -152,7 +152,7 @@ export function StudentPreviewDialog({
   // Filter visible blocks based on visibility conditions
   const getVisibleBlocks = (blocks: Block[]): Block[] => {
     return blocks.filter((block, idx) => {
-      const vc = block.visibilityCondition;
+      const vc = (block as any).visibilityCondition;
       if (!vc || vc === 'always') return true;
       if (vc === 'after prev_complete' || vc === 'after_prev_complete') {
         if (idx === 0) return true;

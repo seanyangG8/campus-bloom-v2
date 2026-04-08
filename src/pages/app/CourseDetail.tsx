@@ -36,6 +36,7 @@ function CourseBuilder({ course }: { course: typeof demoCourses[0] }) {
   
   const [previewOpen, setPreviewOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <div className="space-y-6">
