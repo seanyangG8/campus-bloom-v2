@@ -239,9 +239,22 @@ function TextBlockEditor({ content, onChange }: { content: any; onChange: (c: an
   );
 }
 
-// Video Block Editor with enhanced fields
+// Video Block Editor with chapters editor
 function VideoBlockEditor({ content, onChange }: { content: any; onChange: (c: any) => void }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const chapters = content.chapters || [];
+
+  const addChapter = () => {
+    onChange({ ...content, chapters: [...chapters, { time: '', title: '' }] });
+  };
+  const updateChapter = (index: number, field: string, value: string) => {
+    const updated = [...chapters];
+    updated[index] = { ...updated[index], [field]: value };
+    onChange({ ...content, chapters: updated });
+  };
+  const removeChapter = (index: number) => {
+    onChange({ ...content, chapters: chapters.filter((_: any, i: number) => i !== index) });
+  };
 
   return (
     <div className="space-y-4">
@@ -290,6 +303,42 @@ function VideoBlockEditor({ content, onChange }: { content: any; onChange: (c: a
           placeholder="Paste video transcript here for accessibility..."
           className="min-h-[100px]"
         />
+      </div>
+
+      {/* Chapters Editor */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Chapters (optional)</Label>
+          <Button variant="outline" size="sm" onClick={addChapter}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add Chapter
+          </Button>
+        </div>
+        {chapters.length > 0 ? (
+          <div className="space-y-2">
+            {chapters.map((ch: any, i: number) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={ch.time || ''}
+                  onChange={(e) => updateChapter(i, 'time', e.target.value)}
+                  placeholder="0:00"
+                  className="w-20"
+                />
+                <Input
+                  value={ch.title || ''}
+                  onChange={(e) => updateChapter(i, 'title', e.target.value)}
+                  placeholder="Chapter title"
+                  className="flex-1"
+                />
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeChapter(i)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No chapters. Add chapters to help students navigate the video.</p>
+        )}
       </div>
 
       <Button
@@ -345,8 +394,22 @@ function VideoBlockEditor({ content, onChange }: { content: any; onChange: (c: a
   );
 }
 
-// Image Block Editor with size and gallery options
+// Image Block Editor with gallery CRUD
 function ImageBlockEditor({ content, onChange }: { content: any; onChange: (c: any) => void }) {
+  const galleryImages = content.images || [];
+
+  const addGalleryImage = () => {
+    onChange({ ...content, images: [...galleryImages, { url: '', alt: '', caption: '' }] });
+  };
+  const updateGalleryImage = (index: number, field: string, value: string) => {
+    const updated = [...galleryImages];
+    updated[index] = { ...updated[index], [field]: value };
+    onChange({ ...content, images: updated });
+  };
+  const removeGalleryImage = (index: number) => {
+    onChange({ ...content, images: galleryImages.filter((_: any, i: number) => i !== index) });
+  };
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -404,6 +467,47 @@ function ImageBlockEditor({ content, onChange }: { content: any; onChange: (c: a
         />
         <Label htmlFor="allowImgDownload">Allow download</Label>
       </div>
+
+      <div className="flex items-center gap-2">
+        <Switch
+          id="galleryMode"
+          checked={content.galleryMode === true}
+          onCheckedChange={(checked) => onChange({ ...content, galleryMode: checked })}
+        />
+        <Label htmlFor="galleryMode">Gallery mode (multiple images)</Label>
+      </div>
+
+      {/* Gallery images CRUD */}
+      {content.galleryMode && (
+        <div className="space-y-3 p-4 bg-muted/30 rounded-lg">
+          <div className="flex items-center justify-between">
+            <Label>Gallery Images</Label>
+            <Button variant="outline" size="sm" onClick={addGalleryImage}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add Image
+            </Button>
+          </div>
+          {galleryImages.length > 0 ? (
+            <div className="space-y-3">
+              {galleryImages.map((img: any, i: number) => (
+                <div key={i} className="border rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Image {i + 1}</Label>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeGalleryImage(i)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <Input value={img.url || ''} onChange={(e) => updateGalleryImage(i, 'url', e.target.value)} placeholder="Image URL" />
+                  <Input value={img.alt || ''} onChange={(e) => updateGalleryImage(i, 'alt', e.target.value)} placeholder="Alt text" />
+                  <Input value={img.caption || ''} onChange={(e) => updateGalleryImage(i, 'caption', e.target.value)} placeholder="Caption (optional)" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">No gallery images. Add images to create a gallery.</p>
+          )}
+        </div>
+      )}
 
       {content.url && (
         <div className="mt-4">
