@@ -898,8 +898,8 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   const maxAttempts = block.maxAttempts || 0;
   
   // Merge real items + distractors, shuffled
-  const allItems = useMemo(() => {
-    const combined = items.map((item: string, i: number) => ({ text: item, originalIndex: i, isDistractor: false }));
+  const allItems = useMemo((): Array<{ text: string; originalIndex: number; isDistractor: boolean }> => {
+    const combined: Array<{ text: string; originalIndex: number; isDistractor: boolean }> = items.map((item: string, i: number) => ({ text: item, originalIndex: i, isDistractor: false }));
     distractors.forEach((d: string) => combined.push({ text: d, originalIndex: -1, isDistractor: true }));
     return shuffleArray(combined);
   }, [items.length, distractors.length]);
