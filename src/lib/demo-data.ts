@@ -106,7 +106,11 @@ export type BlockType =
   | 'reflection'
   | 'qa-thread'
   | 'resource'
-  | 'divider';
+  | 'divider'
+  | 'gap-fill'
+  | 'poll'
+  | 'reveal'
+  | 'file-upload';
 
 // Enhanced content types for each block
 export interface TextBlockContent {
@@ -230,6 +234,50 @@ export interface QAThreadBlockContent {
   moderationEnabled?: boolean;
   questions?: any[];
   allowAnonymous?: boolean;
+}
+
+export interface GapFillBlockContent {
+  instruction: string;
+  sentences: Array<{
+    id: string;
+    textWithBlanks: string; // Use {{1}}, {{2}} for blanks
+    blanks: Array<{
+      id: string;
+      acceptedAnswers: string[];
+      caseSensitive?: boolean;
+    }>;
+  }>;
+  showCorrectAfter?: boolean;
+  scoringMode?: 'all-or-nothing' | 'partial-credit';
+}
+
+export interface PollBlockContent {
+  question: string;
+  options: string[];
+  allowMultiple?: boolean;
+  showResults?: boolean;
+  chartType?: 'bar' | 'pie';
+  anonymousVoting?: boolean;
+}
+
+export interface RevealBlockContent {
+  sections: Array<{
+    id: string;
+    title: string;
+    content: string; // HTML content
+  }>;
+  style?: 'accordion' | 'click-to-reveal' | 'tabs';
+  allowMultipleOpen?: boolean;
+}
+
+export interface FileUploadBlockContent {
+  prompt: string;
+  allowedTypes: ('image' | 'video' | 'audio' | 'document' | 'presentation')[];
+  maxFileSize: number; // MB
+  maxFiles: number;
+  instructions?: string;
+  rubric?: string;
+  mustSubmitToComplete?: boolean;
 }
 
 export interface Student {
@@ -524,6 +572,10 @@ export const blockTypes: { type: BlockType; label: string; icon: string; descrip
   { type: 'qa-thread', label: 'Q&A Thread', icon: 'MessagesSquare', description: 'Questions with tutor answers' },
   { type: 'resource', label: 'Resource', icon: 'FileText', description: 'Downloadable file' },
   { type: 'divider', label: 'Divider', icon: 'Minus', description: 'Visual separator' },
+  { type: 'gap-fill', label: 'Gap Fill', icon: 'TextCursorInput', description: 'Fill in the blanks' },
+  { type: 'poll', label: 'Poll', icon: 'BarChart3', description: 'Quick poll with results' },
+  { type: 'reveal', label: 'Reveal', icon: 'ChevronDown', description: 'Click-to-reveal sections' },
+  { type: 'file-upload', label: 'File Upload', icon: 'Upload', description: 'Student file submission' },
 ];
 
 export const whatsappTemplates = [
