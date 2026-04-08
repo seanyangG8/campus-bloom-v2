@@ -337,6 +337,8 @@ function InteractiveBlock({
           {block.type === 'micro-quiz' && '❓'}{block.type === 'drag-drop-reorder' && '↕️'}
           {block.type === 'whiteboard' && '✏️'}{block.type === 'reflection' && '💭'}
           {block.type === 'qa-thread' && '💬'}{block.type === 'resource' && '📎'}{block.type === 'divider' && '—'}
+          {block.type === 'gap-fill' && '📝'}{block.type === 'poll' && '📊'}
+          {block.type === 'reveal' && '👁️'}{block.type === 'file-upload' && '📤'}
         </span>
         <span className="font-medium text-sm">{block.title}</span>
         {block.isRequired && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">Required</span>}
@@ -353,6 +355,10 @@ function InteractiveBlock({
         {block.type === 'resource' && <ResourceBlockPreview block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
         {block.type === 'qa-thread' && <QAThreadBlockInteractive block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
         {block.type === 'divider' && <DividerBlockPreview block={block} />}
+        {block.type === 'gap-fill' && <GapFillBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
+        {block.type === 'poll' && <PollBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
+        {block.type === 'reveal' && <RevealBlockInteractive block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
+        {block.type === 'file-upload' && <FileUploadBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
       </div>
     </div>
   );
