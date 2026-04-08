@@ -76,12 +76,7 @@ function CourseBuilder({ course }: { course: typeof demoCourses[0] }) {
             <Button 
               variant="outline" 
               size="icon"
-              onClick={() => {
-                // TODO: Open course settings dialog
-                import('sonner').then(({ toast }) => {
-                  toast.info('Course settings dialog coming soon');
-                });
-              }}
+              onClick={() => setSettingsOpen(true)}
             >
               <Settings className="h-4 w-4" />
             </Button>
