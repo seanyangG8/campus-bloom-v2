@@ -395,6 +395,7 @@ function MultipleSelectPreview({
   onAnswer: (value: string[]) => void;
 }) {
   const selected = answer || [];
+  const correctCount = content.options.filter(o => o.isCorrect).length;
 
   const toggleOption = (optionId: string) => {
     if (selected.includes(optionId)) {
@@ -406,6 +407,9 @@ function MultipleSelectPreview({
 
   return (
     <div className="space-y-2">
+      {correctCount > 0 && (
+        <p className="text-xs text-muted-foreground italic">Select {correctCount} answer{correctCount > 1 ? 's' : ''}</p>
+      )}
       {content.options.map((option) => (
         <div
           key={option.id}
@@ -489,26 +493,40 @@ function FillBlankPreview({
 }) {
   const answers = answer || {};
 
+  // Render text with inline blanks
+  const renderInlineText = () => {
+    const text = content.textWithBlanks || '';
+    const parts = text.split(/(\{\{\d+\}\})/g);
+    let blankCounter = 0;
+    
+    return (
+      <p className="text-sm leading-8 flex flex-wrap items-center gap-1">
+        {parts.map((part, pi) => {
+          const match = part.match(/\{\{(\d+)\}\}/);
+          if (match) {
+            const blankIndex = blankCounter;
+            blankCounter++;
+            const blank = content.blanks[blankIndex];
+            if (!blank) return <span key={pi}>___</span>;
+            return (
+              <input
+                key={pi}
+                value={answers[blank.id] || ''}
+                onChange={(e) => onAnswer({ ...answers, [blank.id]: e.target.value })}
+                placeholder="..."
+                className="inline-block w-28 h-7 px-2 text-sm border-b-2 border-muted-foreground/30 bg-transparent outline-none text-center focus:border-primary transition-colors"
+              />
+            );
+          }
+          return <span key={pi}>{part}</span>;
+        })}
+      </p>
+    );
+  };
+
   return (
     <div className="space-y-4">
-      <p className="text-muted-foreground text-sm">{content.textWithBlanks}</p>
-      <div className="space-y-3">
-        {content.blanks.map((blank, index) => (
-          <div key={blank.id} className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground shrink-0">
-              Blank {index + 1}:
-            </span>
-            <Input
-              value={answers[blank.id] || ''}
-              onChange={(e) =>
-                onAnswer({ ...answers, [blank.id]: e.target.value })
-              }
-              placeholder="Your answer"
-              className="flex-1"
-            />
-          </div>
-        ))}
-      </div>
+      {renderInlineText()}
     </div>
   );
 }
@@ -560,9 +578,17 @@ function EssayPreview({
   onAnswer: (value: string) => void;
 }) {
   const wordCount = (answer || '').split(/\s+/).filter(Boolean).length;
+  const belowMin = content.minWords && wordCount > 0 && wordCount < content.minWords;
+  const aboveMax = content.maxWords && wordCount > content.maxWords;
 
   return (
     <div className="space-y-2">
+      {content.rubric && (
+        <details className="text-xs border rounded-lg p-2">
+          <summary className="cursor-pointer text-muted-foreground hover:text-primary font-medium">View Rubric</summary>
+          <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{content.rubric}</p>
+        </details>
+      )}
       <Textarea
         value={answer || ''}
         onChange={(e) => onAnswer(e.target.value)}
@@ -570,7 +596,15 @@ function EssayPreview({
         className="min-h-[200px] resize-none"
       />
       <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{wordCount} words</span>
+        <span className={cn(
+          belowMin && "text-destructive",
+          aboveMax && "text-destructive",
+          !belowMin && !aboveMax && wordCount > 0 && "text-success"
+        )}>
+          {wordCount} words
+          {belowMin && ` (min ${content.minWords} required)`}
+          {aboveMax && ` (max ${content.maxWords} exceeded)`}
+        </span>
         {(content.minWords || content.maxWords) && (
           <span>
             {content.minWords && `Min: ${content.minWords}`}
