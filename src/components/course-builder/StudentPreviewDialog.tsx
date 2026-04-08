@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { 
   Eye, 
   Lock, 
@@ -18,6 +18,11 @@ import {
   ZoomIn,
   FileText,
   Upload,
+  ThumbsUp,
+  Clock,
+  ChevronDown,
+  AlertCircle,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   Dialog,
@@ -394,17 +399,29 @@ function TextBlockPreview({ block }: { block: Block }) {
   );
 }
 
-// --- Video Block with actual embed + watch progress ---
+// --- Video Block with actual embed + watch progress + chapters + time clipping ---
 function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: { 
   block: Block; progress?: BlockProgress; onMarkViewed: () => void; onUpdateProgress: (pct: number) => void;
 }) {
   const [watchPct, setWatchPct] = useState(progress?.watchedPercentage || 0);
   const [showTranscript, setShowTranscript] = useState(false);
   const threshold = block.content?.watchThreshold || 80;
-  const embed = parseVideoEmbed(block.content?.url || '');
+  
+  // Build embed URL with start/end time clipping
+  const embed = useMemo(() => {
+    const base = parseVideoEmbed(block.content?.url || '');
+    if (!base) return null;
+    let url = base.embedUrl;
+    if (base.type === 'youtube') {
+      if (block.content?.startTime) url += `&start=${block.content.startTime}`;
+      if (block.content?.endTime) url += `&end=${block.content.endTime}`;
+    }
+    return { ...base, embedUrl: url };
+  }, [block.content?.url, block.content?.startTime, block.content?.endTime]);
+  
   const isComplete = progress?.status === 'completed';
+  const chapters = block.content?.chapters || [];
 
-  // Simulate watch progress for embedded videos
   useEffect(() => {
     if (!embed || isComplete) return;
     const interval = setInterval(() => {
@@ -445,7 +462,6 @@ function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: 
           </div>
         )}
       </div>
-      {/* Watch progress bar */}
       {embed && !isComplete && (
         <div className="space-y-1">
           <div className="flex justify-between text-xs text-muted-foreground">
@@ -457,6 +473,22 @@ function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: 
       )}
       {block.content?.duration && (
         <p className="text-xs text-muted-foreground">Duration: {block.content.duration}</p>
+      )}
+      {/* Video chapters */}
+      {chapters.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Chapters</p>
+          <div className="flex flex-wrap gap-1.5">
+            {chapters.map((ch: { time: string; title: string }, i: number) => (
+              <button key={i} className="text-xs px-2 py-1 rounded bg-muted hover:bg-primary/10 hover:text-primary transition-colors flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                <span className="font-mono">{ch.time}</span>
+                <span className="text-muted-foreground">—</span>
+                <span>{ch.title}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
       {block.content?.transcript && (
         <div>
@@ -474,9 +506,15 @@ function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: 
   );
 }
 
-// --- Image Block with zoom modal ---
+// --- Image Block with zoom modal + gallery mode ---
 function ImageBlockPreview({ block, onMarkViewed, isComplete }: { block: Block; onMarkViewed: () => void; isComplete?: boolean }) {
   const [isZoomed, setIsZoomed] = useState(false);
+  const [zoomIndex, setZoomIndex] = useState(0);
+  
+  const isGallery = block.content?.galleryMode && block.content?.images?.length > 0;
+  const allImages = isGallery 
+    ? block.content.images as Array<{ url: string; alt: string; caption?: string }>
+    : block.content?.url ? [{ url: block.content.url, alt: block.content.alt || '', caption: block.content.caption }] : [];
 
   useEffect(() => {
     if (!isComplete) {
@@ -487,39 +525,66 @@ function ImageBlockPreview({ block, onMarkViewed, isComplete }: { block: Block; 
 
   return (
     <>
-      <div
-        className={cn(
-          "bg-muted rounded-lg flex items-center justify-center overflow-hidden cursor-pointer relative group",
-          block.content?.displaySize === 'small' && "max-w-[25%]",
-          block.content?.displaySize === 'medium' && "max-w-[50%]",
-          block.content?.displaySize === 'large' && "max-w-[75%]",
-        )}
-        onClick={() => block.content?.url && setIsZoomed(true)}
-      >
-        {block.content?.url ? (
-          <div className="relative">
-            <img src={block.content.url} alt={block.content.alt || ""} className="w-full h-auto" />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-              <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-80 transition-opacity" />
+      {isGallery ? (
+        <div className="grid grid-cols-2 gap-2">
+          {allImages.map((img, i) => (
+            <div key={i} className="bg-muted rounded-lg overflow-hidden cursor-pointer relative group" onClick={() => { setZoomIndex(i); setIsZoomed(true); }}>
+              <img src={img.url} alt={img.alt || ''} className="w-full h-40 object-cover" />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                <ZoomIn className="h-5 w-5 text-white opacity-0 group-hover:opacity-80 transition-opacity" />
+              </div>
+              {img.caption && <p className="text-xs text-center text-muted-foreground p-1 italic">{img.caption}</p>}
             </div>
-            {block.content.caption && (
-              <p className="text-xs text-center text-muted-foreground mt-2 italic">{block.content.caption}</p>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground p-8">No image URL set</p>
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            "bg-muted rounded-lg flex items-center justify-center overflow-hidden cursor-pointer relative group",
+            block.content?.displaySize === 'small' && "max-w-[25%]",
+            block.content?.displaySize === 'medium' && "max-w-[50%]",
+            block.content?.displaySize === 'large' && "max-w-[75%]",
+          )}
+          onClick={() => block.content?.url && setIsZoomed(true)}
+        >
+          {block.content?.url ? (
+            <div className="relative">
+              <img src={block.content.url} alt={block.content.alt || ""} className="w-full h-auto" />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-80 transition-opacity" />
+              </div>
+              {block.content.caption && (
+                <p className="text-xs text-center text-muted-foreground mt-2 italic">{block.content.caption}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground p-8">No image URL set</p>
+          )}
+        </div>
+      )}
 
-      {/* Zoom modal */}
-      {isZoomed && block.content?.url && (
+      {/* Lightbox with prev/next navigation */}
+      {isZoomed && allImages.length > 0 && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-8" onClick={() => setIsZoomed(false)}>
-          <button className="absolute top-4 right-4 text-white hover:text-white/80" onClick={() => setIsZoomed(false)}>
+          <button className="absolute top-4 right-4 text-white hover:text-white/80 z-10" onClick={() => setIsZoomed(false)}>
             <X className="h-6 w-6" />
           </button>
+          {allImages.length > 1 && (
+            <>
+              <button className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10 p-2" onClick={(e) => { e.stopPropagation(); setZoomIndex(prev => (prev - 1 + allImages.length) % allImages.length); }}>
+                <ChevronLeft className="h-8 w-8" />
+              </button>
+              <button className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10 p-2" onClick={(e) => { e.stopPropagation(); setZoomIndex(prev => (prev + 1) % allImages.length); }}>
+                <ChevronRight className="h-8 w-8" />
+              </button>
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm z-10">
+                {zoomIndex + 1} / {allImages.length}
+              </div>
+            </>
+          )}
           <img
-            src={block.content.url}
-            alt={block.content.alt || ""}
+            src={allImages[zoomIndex].url}
+            alt={allImages[zoomIndex].alt || ""}
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
@@ -626,6 +691,13 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
 
   return (
     <div className="space-y-4">
+      {/* Progress indicator */}
+      {questions.length > 1 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>Question {submitted ? questions.length : Math.min(Object.keys(answers).length + 1, questions.length)} of {questions.length}</span>
+          <span>{Object.keys(answers).length} answered</span>
+        </div>
+      )}
       {questionOrder.map((origIdx: number) => {
         const q = questions[origIdx];
         if (!q) return null;
@@ -822,8 +894,17 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   onSubmit: (order: number[]) => { correct: boolean; score: number };
 }) {
   const items = block.content?.items || [];
+  const distractors = block.content?.distractorItems || [];
   const maxAttempts = block.maxAttempts || 0;
-  const [userOrder, setUserOrder] = useState<number[]>(() => shuffleArray(items.map((_: any, i: number) => i)));
+  
+  // Merge real items + distractors, shuffled
+  const allItems = useMemo((): Array<{ text: string; originalIndex: number; isDistractor: boolean }> => {
+    const combined: Array<{ text: string; originalIndex: number; isDistractor: boolean }> = items.map((item: string, i: number) => ({ text: item, originalIndex: i, isDistractor: false }));
+    distractors.forEach((d: string) => combined.push({ text: d, originalIndex: -1, isDistractor: true }));
+    return shuffleArray(combined);
+  }, [items.length, distractors.length]);
+  
+  const [userOrder, setUserOrder] = useState<number[]>(() => allItems.map((_: any, i: number) => i));
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<{ correct: boolean; score: number } | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -843,7 +924,12 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   const handleDragEnd = () => setDraggedIndex(null);
 
   const handleSubmit = () => {
-    const res = onSubmit(userOrder);
+    // Extract only non-distractor items in user's order
+    const orderedOriginalIndices = userOrder
+      .map(i => allItems[i])
+      .filter((item: any) => !item.isDistractor)
+      .map((item: any) => item.originalIndex);
+    const res = onSubmit(orderedOriginalIndices);
     setResult(res);
     setSubmitted(true);
     setAttemptCount(prev => prev + 1);
@@ -851,7 +937,7 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   };
 
   const handleRetry = () => {
-    setUserOrder(shuffleArray(items.map((_: any, i: number) => i)));
+    setUserOrder(shuffleArray(allItems.map((_: any, i: number) => i)));
     setSubmitted(false);
     setResult(null);
   };
@@ -863,26 +949,36 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{block.content?.instruction || "Drag and drop to reorder:"}</p>
+      {distractors.length > 0 && <p className="text-xs text-muted-foreground italic">Note: Some items may not belong in the sequence.</p>}
       <div className="space-y-2">
-        {userOrder.map((itemIndex, displayIndex) => (
-          <div
-            key={itemIndex}
-            draggable={!submitted}
-            onDragStart={() => handleDragStart(displayIndex)}
-            onDragOver={(e) => handleDragOver(e, displayIndex)}
-            onDragEnd={handleDragEnd}
-            className={cn(
-              "flex items-center gap-2 p-3 bg-muted/50 rounded border transition-all",
-              !submitted && "cursor-move hover:bg-muted",
-              draggedIndex === displayIndex && "opacity-50",
-              submitted && block.content?.correctOrder?.[displayIndex] === itemIndex && "border-success bg-success/10",
-              submitted && block.content?.correctOrder?.[displayIndex] !== itemIndex && "border-destructive bg-destructive/10"
-            )}
-          >
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">{items[itemIndex] || `Item ${itemIndex + 1}`}</span>
-          </div>
-        ))}
+        {userOrder.map((itemIndex, displayIndex) => {
+          const item = allItems[itemIndex];
+          const isCorrectPosition = submitted && !item.isDistractor && block.content?.correctOrder?.[displayIndex] === item.originalIndex;
+          const isWrongPosition = submitted && !item.isDistractor && block.content?.correctOrder?.[displayIndex] !== item.originalIndex;
+          const isDistractorRevealed = submitted && item.isDistractor;
+          return (
+            <div
+              key={itemIndex}
+              draggable={!submitted}
+              onDragStart={() => handleDragStart(displayIndex)}
+              onDragOver={(e) => handleDragOver(e, displayIndex)}
+              onDragEnd={handleDragEnd}
+              className={cn(
+                "flex items-center gap-2 p-3 bg-muted/50 rounded border transition-all",
+                !submitted && "cursor-move hover:bg-muted",
+                draggedIndex === displayIndex && "opacity-50",
+                isCorrectPosition && "border-success bg-success/10",
+                isWrongPosition && "border-destructive bg-destructive/10",
+                isDistractorRevealed && "border-amber-400 bg-amber-50 dark:bg-amber-950/20 opacity-60"
+              )}
+            >
+              <span className="text-xs font-mono text-muted-foreground w-5 text-center">{displayIndex + 1}</span>
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm flex-1">{item.text}</span>
+              {isDistractorRevealed && <span className="text-xs text-amber-600">Doesn't belong</span>}
+            </div>
+          );
+        })}
       </div>
       {!submitted ? (
         <Button onClick={handleSubmit} className="w-full">Check Order</Button>
@@ -967,8 +1063,25 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
 
   if (submitted) {
     return (
-      <div className="p-3 rounded-lg bg-success/10 text-success text-center">
-        <CheckCircle2 className="h-5 w-5 inline mr-2" /> Reflection submitted
+      <div className="space-y-3">
+        <div className="p-3 rounded-lg bg-success/10 text-success text-center">
+          <CheckCircle2 className="h-5 w-5 inline mr-2" /> Reflection submitted
+        </div>
+        {/* Show peer reflections gallery */}
+        {block.content?.showPeerReflections && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Peer Reflections</p>
+            {[
+              { author: 'Alex M.', text: 'I found the concept of quadratic factoring particularly interesting because it connects algebra with geometry...' },
+              { author: 'Sarah K.', text: 'My main takeaway was understanding how the discriminant determines the nature of roots...' },
+            ].map((peer, i) => (
+              <div key={i} className="p-3 bg-muted/50 rounded-lg">
+                <p className="text-xs font-medium mb-1">{block.content?.privacyMode === 'anonymous' ? 'Anonymous' : peer.author}</p>
+                <p className="text-sm text-muted-foreground">{peer.text}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -976,6 +1089,13 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{block.content?.prompt || "Share your reflection..."}</p>
+      {/* Rubric display */}
+      {block.content?.rubric && (
+        <details className="text-xs border rounded-lg p-2">
+          <summary className="cursor-pointer text-muted-foreground hover:text-primary font-medium">View Rubric</summary>
+          <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{block.content.rubric}</p>
+        </details>
+      )}
       {block.content?.exampleResponse && (
         <details className="text-xs">
           <summary className="cursor-pointer text-muted-foreground hover:text-primary">View example response</summary>
@@ -1014,51 +1134,107 @@ function ResourceBlockPreview({ block, onMarkViewed, isComplete }: { block: Bloc
   };
 
   return (
-    <div className="p-4 bg-muted/50 rounded-lg flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <span className="text-2xl">{icon}</span>
-        <div>
-          <p className="text-sm font-medium">{block.content?.fileName || "Resource file"}</p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            {block.content?.fileSize && <span>{block.content.fileSize}</span>}
-            {block.content?.versionLabel && <span>• {block.content.versionLabel}</span>}
+    <div className="p-4 bg-muted/50 rounded-lg">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">{icon}</span>
+          <div>
+            <p className="text-sm font-medium">{block.content?.fileName || "Resource file"}</p>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {block.content?.fileSize && <span>{block.content.fileSize}</span>}
+              {block.content?.versionLabel && <span>• {block.content.versionLabel}</span>}
+            </div>
           </div>
         </div>
+        <Button variant="outline" size="sm" onClick={handleClick}>
+          {isLink ? (<><ExternalLink className="h-4 w-4 mr-1" />Open</>) : (<><Download className="h-4 w-4 mr-1" />Download</>)}
+        </Button>
       </div>
-      <Button variant="outline" size="sm" onClick={handleClick}>
-        {isLink ? (<><ExternalLink className="h-4 w-4 mr-1" />Open</>) : (<><Download className="h-4 w-4 mr-1" />Download</>)}
-      </Button>
+      {/* Expiry date display */}
+      {block.content?.expiryDate && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs">
+          <AlertCircle className="h-3 w-3 text-amber-500" />
+          <span className="text-amber-600 dark:text-amber-400">
+            Expires: {new Date(block.content.expiryDate).toLocaleDateString()}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
-// --- Q&A Thread Interactive ---
+// --- Q&A Thread Interactive with upvoting + anonymous + categories ---
 function QAThreadBlockInteractive({ block, onMarkViewed, isComplete }: { block: Block; onMarkViewed: () => void; isComplete?: boolean }) {
-  const [questions, setQuestions] = useState<{ id: string; text: string; author: string; reply?: string }[]>([
-    { id: 'demo-1', text: 'Can you explain the difference between these two approaches?', author: 'Student A', reply: 'Great question! The first approach is more efficient for large datasets, while the second is simpler to implement.' },
+  const [questions, setQuestions] = useState<{ id: string; text: string; author: string; reply?: string; votes: number; category?: string }[]>([
+    { id: 'demo-1', text: 'Can you explain the difference between these two approaches?', author: 'Student A', reply: 'Great question! The first approach is more efficient for large datasets, while the second is simpler to implement.', votes: 3, category: 'Concepts' },
+    { id: 'demo-2', text: 'When would we use completing the square vs the quadratic formula?', author: 'Student B', votes: 5, category: 'Methods' },
   ]);
   const [newQuestion, setNewQuestion] = useState('');
+  const [postAnonymously, setPostAnonymously] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [votedQuestions, setVotedQuestions] = useState<Set<string>>(new Set());
+  
+  const categories = block.content?.categories || [];
+  const anonymityMode = block.content?.anonymity || 'off';
 
   const handlePost = () => {
     if (!newQuestion.trim()) return;
-    setQuestions(prev => [...prev, { id: `q-${Date.now()}`, text: newQuestion.trim(), author: 'You' }]);
+    const author = postAnonymously || anonymityMode === 'always-anonymous' ? 'Anonymous' : 'You';
+    setQuestions(prev => [...prev, { id: `q-${Date.now()}`, text: newQuestion.trim(), author, votes: 0, category: activeCategory || undefined }]);
     setNewQuestion('');
     if (!isComplete) onMarkViewed();
     toast.success("Question posted!");
   };
 
+  const handleUpvote = (qId: string) => {
+    if (votedQuestions.has(qId)) return;
+    setVotedQuestions(prev => new Set([...prev, qId]));
+    setQuestions(prev => prev.map(q => q.id === qId ? { ...q, votes: q.votes + 1 } : q));
+  };
+
+  const filteredQuestions = activeCategory 
+    ? questions.filter(q => q.category === activeCategory) 
+    : questions;
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">Ask questions and discuss with your tutor</p>
       
+      {/* Category filters */}
+      {categories.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            className={cn("text-xs px-2 py-1 rounded-full border transition-colors", !activeCategory ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+            onClick={() => setActiveCategory(null)}
+          >All</button>
+          {categories.map((cat: string) => (
+            <button
+              key={cat}
+              className={cn("text-xs px-2 py-1 rounded-full border transition-colors", activeCategory === cat ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+              onClick={() => setActiveCategory(cat)}
+            >{cat}</button>
+          ))}
+        </div>
+      )}
+      
       {/* Thread */}
       <div className="space-y-3 max-h-60 overflow-y-auto">
-        {questions.map(q => (
+        {filteredQuestions.sort((a, b) => b.votes - a.votes).map(q => (
           <div key={q.id} className="space-y-2">
             <div className="p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                <MessageCircle className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-medium">{q.author}</span>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-medium">{q.author}</span>
+                  {q.category && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{q.category}</span>}
+                </div>
+                <button
+                  onClick={() => handleUpvote(q.id)}
+                  className={cn("flex items-center gap-1 text-xs transition-colors", votedQuestions.has(q.id) ? "text-primary" : "text-muted-foreground hover:text-primary")}
+                >
+                  <ThumbsUp className="h-3 w-3" />
+                  <span>{q.votes}</span>
+                </button>
               </div>
               <p className="text-sm">{q.text}</p>
             </div>
@@ -1075,22 +1251,30 @@ function QAThreadBlockInteractive({ block, onMarkViewed, isComplete }: { block: 
       </div>
 
       {/* Post new question */}
-      <div className="flex gap-2">
-        <Input
-          value={newQuestion}
-          onChange={(e) => setNewQuestion(e.target.value)}
-          placeholder="Ask a question..."
-          onKeyDown={(e) => e.key === 'Enter' && handlePost()}
-        />
-        <Button size="sm" onClick={handlePost} disabled={!newQuestion.trim()}>
-          <Send className="h-4 w-4" />
-        </Button>
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input
+            value={newQuestion}
+            onChange={(e) => setNewQuestion(e.target.value)}
+            placeholder="Ask a question..."
+            onKeyDown={(e) => e.key === 'Enter' && handlePost()}
+          />
+          <Button size="sm" onClick={handlePost} disabled={!newQuestion.trim()}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+        {anonymityMode === 'optional' && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+            <input type="checkbox" checked={postAnonymously} onChange={(e) => setPostAnonymously(e.target.checked)} className="rounded" />
+            Post anonymously
+          </label>
+        )}
       </div>
     </div>
   );
 }
 
-// --- Gap Fill Block ---
+// --- Gap Fill Block with inline rendering ---
 function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -1101,12 +1285,13 @@ function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Blo
 
   const handleSubmit = () => {
     const res: Record<string, boolean> = {};
-    let correct = 0;
     allBlanks.forEach((blank: any) => {
-      const userAnswer = (answers[blank.id] || '').trim().toLowerCase();
-      const isCorrect = blank.acceptedAnswers?.some((a: string) => a.trim().toLowerCase() === userAnswer) || false;
+      const userAnswer = (answers[blank.id] || '').trim();
+      const caseSensitive = blank.caseSensitive || false;
+      const isCorrect = blank.acceptedAnswers?.some((a: string) => 
+        caseSensitive ? a.trim() === userAnswer : a.trim().toLowerCase() === userAnswer.toLowerCase()
+      ) || false;
       res[blank.id] = isCorrect;
-      if (isCorrect) correct++;
     });
     setResults(res);
     setSubmitted(true);
@@ -1119,32 +1304,53 @@ function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Blo
     setSubmitted(false);
   };
 
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{block.content?.instruction || 'Fill in the blanks:'}</p>
-      {sentences.map((sentence: any, si: number) => (
-        <div key={sentence.id} className="space-y-2">
-          <p className="text-sm">{sentence.textWithBlanks?.replace(/\{\{\d+\}\}/g, '___')}</p>
-          <div className="flex flex-wrap gap-2">
-            {sentence.blanks?.map((blank: any, bi: number) => (
-              <div key={blank.id} className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">Blank {bi + 1}:</span>
-                <Input
+  // Render sentence with inline blanks
+  const renderSentenceInline = (sentence: any) => {
+    const text = sentence.textWithBlanks || '';
+    const parts = text.split(/(\{\{\d+\}\})/g);
+    let blankCounter = 0;
+    
+    return (
+      <p className="text-sm leading-8 flex flex-wrap items-center gap-1">
+        {parts.map((part: string, pi: number) => {
+          const match = part.match(/\{\{(\d+)\}\}/);
+          if (match) {
+            const blankIndex = blankCounter;
+            blankCounter++;
+            const blank = sentence.blanks?.[blankIndex];
+            if (!blank) return <span key={pi}>___</span>;
+            return (
+              <span key={pi} className="inline-flex items-center gap-1">
+                <input
                   value={answers[blank.id] || ''}
                   onChange={(e) => setAnswers({ ...answers, [blank.id]: e.target.value })}
                   disabled={submitted}
                   className={cn(
-                    "w-32 h-8 text-sm",
-                    submitted && results[blank.id] && "border-green-500 bg-green-50",
-                    submitted && !results[blank.id] && "border-red-500 bg-red-50"
+                    "inline-block w-28 h-7 px-2 text-sm border-b-2 bg-transparent outline-none text-center transition-colors",
+                    !submitted && "border-muted-foreground/30 focus:border-primary",
+                    submitted && results[blank.id] && "border-green-500 text-green-700 dark:text-green-400",
+                    submitted && !results[blank.id] && "border-red-500 text-red-700 dark:text-red-400"
                   )}
+                  placeholder="..."
                 />
                 {submitted && !results[blank.id] && block.content?.showCorrectAfter && (
                   <span className="text-xs text-muted-foreground">({blank.acceptedAnswers?.[0]})</span>
                 )}
-              </div>
-            ))}
-          </div>
+              </span>
+            );
+          }
+          return <span key={pi}>{part}</span>;
+        })}
+      </p>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">{block.content?.instruction || 'Fill in the blanks:'}</p>
+      {sentences.map((sentence: any) => (
+        <div key={sentence.id} className="p-3 bg-muted/30 rounded-lg">
+          {renderSentenceInline(sentence)}
         </div>
       ))}
       {!submitted ? (
@@ -1161,7 +1367,7 @@ function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Blo
   );
 }
 
-// --- Poll Block ---
+// --- Poll Block with pie chart support ---
 function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const [voted, setVoted] = useState(false);
@@ -1172,6 +1378,7 @@ function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block;
 
   const options = block.content?.options || [];
   const allowMultiple = block.content?.allowMultiple || false;
+  const chartType = block.content?.chartType || 'bar';
 
   const toggleOption = (index: number) => {
     if (voted) return;
@@ -1188,10 +1395,27 @@ function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block;
   };
 
   const totalVotes = mockResults.reduce((a: number, b: number) => a + b, 0) + (voted ? 1 : 0);
+  const pieColors = ['hsl(var(--primary))', 'hsl(var(--accent))', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+
+  // Build pie chart CSS gradient
+  const buildPieGradient = () => {
+    const voteData = options.map((_: string, i: number) => mockResults[i] + (voted && selected.includes(i) ? 1 : 0));
+    let cumulativePct = 0;
+    const stops: string[] = [];
+    voteData.forEach((votes: number, i: number) => {
+      const pct = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+      stops.push(`${pieColors[i % pieColors.length]} ${cumulativePct}% ${cumulativePct + pct}%`);
+      cumulativePct += pct;
+    });
+    return `conic-gradient(${stops.join(', ')})`;
+  };
 
   return (
     <div className="space-y-4">
       <p className="font-medium text-sm">{block.content?.question || 'Poll question'}</p>
+      {block.content?.anonymousVoting && (
+        <p className="text-xs text-muted-foreground italic">🔒 Votes are anonymous</p>
+      )}
       <div className="space-y-2">
         {options.map((opt: string, i: number) => {
           const votes = mockResults[i] + (voted && selected.includes(i) ? 1 : 0);
@@ -1206,19 +1430,30 @@ function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block;
               )}
               onClick={() => toggleOption(i)}
             >
-              {voted && block.content?.showResults !== false && (
+              {voted && block.content?.showResults !== false && chartType === 'bar' && (
                 <div className="absolute inset-0 bg-primary/10 rounded-lg" style={{ width: `${pct}%` }} />
               )}
               <div className="relative flex justify-between items-center">
-                <span className="text-sm">{opt}</span>
+                <div className="flex items-center gap-2">
+                  {voted && chartType === 'pie' && (
+                    <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: pieColors[i % pieColors.length] }} />
+                  )}
+                  <span className="text-sm">{opt}</span>
+                </div>
                 {voted && block.content?.showResults !== false && (
-                  <span className="text-xs font-medium text-muted-foreground">{pct}%</span>
+                  <span className="text-xs font-medium text-muted-foreground">{pct}% ({votes})</span>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+      {/* Pie chart visualization */}
+      {voted && block.content?.showResults !== false && chartType === 'pie' && (
+        <div className="flex justify-center py-2">
+          <div className="w-32 h-32 rounded-full" style={{ background: buildPieGradient() }} />
+        </div>
+      )}
       {!voted ? (
         <Button size="sm" onClick={handleVote} disabled={selected.length === 0}>Vote</Button>
       ) : (
@@ -1245,7 +1480,6 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
         }
         next.add(id);
       }
-      // Auto-complete when all sections revealed
       if (next.size === sections.length && !isComplete) {
         onMarkViewed();
       }
@@ -1298,15 +1532,33 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
   );
 }
 
-// --- File Upload Block ---
+// --- File Upload Block with real file input ---
 function FileUploadBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
-  const [files, setFiles] = useState<string[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const maxFiles = block.content?.maxFiles || 1;
+  const maxSize = block.content?.maxFileSize || 20;
 
-  const handleFileSelect = () => {
-    // Simulated file selection
-    const fileName = `submission_${Date.now()}.pdf`;
-    setFiles(prev => [...prev, fileName]);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = Array.from(e.target.files || []);
+    addFiles(newFiles);
+    if (e.target) e.target.value = '';
+  };
+
+  const addFiles = (newFiles: File[]) => {
+    const filtered = newFiles.filter(f => f.size <= maxSize * 1024 * 1024);
+    if (filtered.length < newFiles.length) {
+      toast.error(`Some files exceed ${maxSize}MB limit`);
+    }
+    setFiles(prev => [...prev, ...filtered].slice(0, maxFiles));
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    addFiles(Array.from(e.dataTransfer.files));
   };
 
   const handleSubmit = () => {
@@ -1315,51 +1567,90 @@ function FileUploadBlockInteractive({ block, progress, onMarkViewed }: { block: 
     toast.success('Files submitted successfully');
   };
 
+  const removeFile = (index: number) => setFiles(prev => prev.filter((_, i) => i !== index));
+
+  const isImage = (file: File) => file.type.startsWith('image/');
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{block.content?.prompt || 'Upload your work'}</p>
-      <div className="border-2 border-dashed rounded-lg p-6 text-center">
+      {/* Rubric */}
+      {block.content?.rubric && (
+        <details className="text-xs border rounded-lg p-2">
+          <summary className="cursor-pointer text-muted-foreground hover:text-primary font-medium">View Rubric</summary>
+          <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{block.content.rubric}</p>
+        </details>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        multiple={maxFiles > 1}
+        accept={(block.content?.allowedTypes || []).map((t: string) => {
+          const map: Record<string, string> = { image: 'image/*', video: 'video/*', audio: 'audio/*', document: '.pdf,.doc,.docx,.txt', presentation: '.ppt,.pptx' };
+          return map[t] || '*';
+        }).join(',')}
+        onChange={handleFileChange}
+      />
+      <div
+        className={cn(
+          "border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer",
+          isDragOver && "border-primary bg-primary/5",
+          submitted && "pointer-events-none opacity-60"
+        )}
+        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => !submitted && fileInputRef.current?.click()}
+      >
         {files.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
             {files.map((f, i) => (
-              <div key={i} className="flex items-center gap-2 justify-center text-sm">
-                <FileText className="h-4 w-4 text-primary" />
-                <span>{f}</span>
+              <div key={i} className="flex items-center gap-3 p-2 bg-muted/50 rounded">
+                {isImage(f) ? (
+                  <img src={URL.createObjectURL(f)} alt={f.name} className="w-10 h-10 rounded object-cover" />
+                ) : (
+                  <FileText className="h-8 w-8 text-primary shrink-0" />
+                )}
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-sm truncate">{f.name}</p>
+                  <p className="text-xs text-muted-foreground">{(f.size / 1024 / 1024).toFixed(1)} MB</p>
+                </div>
                 {!submitted && (
-                  <Button variant="ghost" size="sm" onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}>
+                  <Button variant="ghost" size="sm" onClick={() => removeFile(i)}>
                     <X className="h-3 w-3" />
                   </Button>
                 )}
               </div>
             ))}
+            {!submitted && files.length < maxFiles && (
+              <Button variant="outline" size="sm" className="mt-2" onClick={() => fileInputRef.current?.click()}>
+                Add More
+              </Button>
+            )}
           </div>
         ) : (
           <>
             <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">Drop files here or click to upload</p>
+            <p className="text-sm font-medium">Drop files here or click to browse</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Max {maxSize}MB • {maxFiles} file(s) • {(block.content?.allowedTypes || []).join(', ')}
+            </p>
           </>
         )}
-        {!submitted && files.length < (block.content?.maxFiles || 1) && (
-          <Button variant="outline" size="sm" className="mt-3" onClick={handleFileSelect}>
-            Select File
-          </Button>
-        )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        Max {block.content?.maxFileSize || 20}MB • {block.content?.maxFiles || 1} file(s) • 
-        {(block.content?.allowedTypes || []).join(', ')}
-      </p>
       {files.length > 0 && !submitted && (
         <Button size="sm" onClick={handleSubmit}>Submit</Button>
       )}
       {submitted && (
-        <div className="flex items-center gap-2 text-sm text-green-600">
+        <div className="flex items-center gap-2 text-sm text-success">
           <CheckCircle2 className="h-4 w-4" /> Submitted
         </div>
       )}
     </div>
   );
 }
+
 function DividerBlockPreview({ block }: { block: Block }) {
   const style = block.content?.style || 'line';
   const spacing = block.content?.spacing || 'normal';
