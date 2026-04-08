@@ -148,6 +148,13 @@ function CourseBuilder({ course }: { course: typeof demoCourses[0] }) {
         open={publishOpen}
         onOpenChange={setPublishOpen}
       />
+
+      {/* Course Settings Dialog */}
+      <CourseSettingsDialog
+        course={course}
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+      />
     </div>
   );
 }
