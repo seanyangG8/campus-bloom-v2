@@ -154,7 +154,7 @@ export function StudentPreviewDialog({
     return blocks.filter((block, idx) => {
       const vc = block.visibilityCondition;
       if (!vc || vc === 'always') return true;
-      if (vc === 'after prev_complete') {
+      if (vc === 'after prev_complete' || vc === 'after_prev_complete') {
         if (idx === 0) return true;
         const prevBlock = blocks[idx - 1];
         const prevProgress = getBlockProgress(prevBlock.id);
