@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { 
   Eye, 
   Lock, 
@@ -18,6 +18,11 @@ import {
   ZoomIn,
   FileText,
   Upload,
+  ThumbsUp,
+  Clock,
+  ChevronDown,
+  AlertCircle,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   Dialog,
@@ -394,17 +399,29 @@ function TextBlockPreview({ block }: { block: Block }) {
   );
 }
 
-// --- Video Block with actual embed + watch progress ---
+// --- Video Block with actual embed + watch progress + chapters + time clipping ---
 function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: { 
   block: Block; progress?: BlockProgress; onMarkViewed: () => void; onUpdateProgress: (pct: number) => void;
 }) {
   const [watchPct, setWatchPct] = useState(progress?.watchedPercentage || 0);
   const [showTranscript, setShowTranscript] = useState(false);
   const threshold = block.content?.watchThreshold || 80;
-  const embed = parseVideoEmbed(block.content?.url || '');
+  
+  // Build embed URL with start/end time clipping
+  const embed = useMemo(() => {
+    const base = parseVideoEmbed(block.content?.url || '');
+    if (!base) return null;
+    let url = base.embedUrl;
+    if (base.type === 'youtube') {
+      if (block.content?.startTime) url += `&start=${block.content.startTime}`;
+      if (block.content?.endTime) url += `&end=${block.content.endTime}`;
+    }
+    return { ...base, embedUrl: url };
+  }, [block.content?.url, block.content?.startTime, block.content?.endTime]);
+  
   const isComplete = progress?.status === 'completed';
+  const chapters = block.content?.chapters || [];
 
-  // Simulate watch progress for embedded videos
   useEffect(() => {
     if (!embed || isComplete) return;
     const interval = setInterval(() => {
@@ -445,7 +462,6 @@ function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: 
           </div>
         )}
       </div>
-      {/* Watch progress bar */}
       {embed && !isComplete && (
         <div className="space-y-1">
           <div className="flex justify-between text-xs text-muted-foreground">
@@ -457,6 +473,22 @@ function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: 
       )}
       {block.content?.duration && (
         <p className="text-xs text-muted-foreground">Duration: {block.content.duration}</p>
+      )}
+      {/* Video chapters */}
+      {chapters.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Chapters</p>
+          <div className="flex flex-wrap gap-1.5">
+            {chapters.map((ch: { time: string; title: string }, i: number) => (
+              <button key={i} className="text-xs px-2 py-1 rounded bg-muted hover:bg-primary/10 hover:text-primary transition-colors flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                <span className="font-mono">{ch.time}</span>
+                <span className="text-muted-foreground">—</span>
+                <span>{ch.title}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
       {block.content?.transcript && (
         <div>
@@ -474,9 +506,15 @@ function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: 
   );
 }
 
-// --- Image Block with zoom modal ---
+// --- Image Block with zoom modal + gallery mode ---
 function ImageBlockPreview({ block, onMarkViewed, isComplete }: { block: Block; onMarkViewed: () => void; isComplete?: boolean }) {
   const [isZoomed, setIsZoomed] = useState(false);
+  const [zoomIndex, setZoomIndex] = useState(0);
+  
+  const isGallery = block.content?.galleryMode && block.content?.images?.length > 0;
+  const allImages = isGallery 
+    ? block.content.images as Array<{ url: string; alt: string; caption?: string }>
+    : block.content?.url ? [{ url: block.content.url, alt: block.content.alt || '', caption: block.content.caption }] : [];
 
   useEffect(() => {
     if (!isComplete) {
@@ -487,39 +525,66 @@ function ImageBlockPreview({ block, onMarkViewed, isComplete }: { block: Block; 
 
   return (
     <>
-      <div
-        className={cn(
-          "bg-muted rounded-lg flex items-center justify-center overflow-hidden cursor-pointer relative group",
-          block.content?.displaySize === 'small' && "max-w-[25%]",
-          block.content?.displaySize === 'medium' && "max-w-[50%]",
-          block.content?.displaySize === 'large' && "max-w-[75%]",
-        )}
-        onClick={() => block.content?.url && setIsZoomed(true)}
-      >
-        {block.content?.url ? (
-          <div className="relative">
-            <img src={block.content.url} alt={block.content.alt || ""} className="w-full h-auto" />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-              <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-80 transition-opacity" />
+      {isGallery ? (
+        <div className="grid grid-cols-2 gap-2">
+          {allImages.map((img, i) => (
+            <div key={i} className="bg-muted rounded-lg overflow-hidden cursor-pointer relative group" onClick={() => { setZoomIndex(i); setIsZoomed(true); }}>
+              <img src={img.url} alt={img.alt || ''} className="w-full h-40 object-cover" />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                <ZoomIn className="h-5 w-5 text-white opacity-0 group-hover:opacity-80 transition-opacity" />
+              </div>
+              {img.caption && <p className="text-xs text-center text-muted-foreground p-1 italic">{img.caption}</p>}
             </div>
-            {block.content.caption && (
-              <p className="text-xs text-center text-muted-foreground mt-2 italic">{block.content.caption}</p>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground p-8">No image URL set</p>
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            "bg-muted rounded-lg flex items-center justify-center overflow-hidden cursor-pointer relative group",
+            block.content?.displaySize === 'small' && "max-w-[25%]",
+            block.content?.displaySize === 'medium' && "max-w-[50%]",
+            block.content?.displaySize === 'large' && "max-w-[75%]",
+          )}
+          onClick={() => block.content?.url && setIsZoomed(true)}
+        >
+          {block.content?.url ? (
+            <div className="relative">
+              <img src={block.content.url} alt={block.content.alt || ""} className="w-full h-auto" />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-80 transition-opacity" />
+              </div>
+              {block.content.caption && (
+                <p className="text-xs text-center text-muted-foreground mt-2 italic">{block.content.caption}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground p-8">No image URL set</p>
+          )}
+        </div>
+      )}
 
-      {/* Zoom modal */}
-      {isZoomed && block.content?.url && (
+      {/* Lightbox with prev/next navigation */}
+      {isZoomed && allImages.length > 0 && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-8" onClick={() => setIsZoomed(false)}>
-          <button className="absolute top-4 right-4 text-white hover:text-white/80" onClick={() => setIsZoomed(false)}>
+          <button className="absolute top-4 right-4 text-white hover:text-white/80 z-10" onClick={() => setIsZoomed(false)}>
             <X className="h-6 w-6" />
           </button>
+          {allImages.length > 1 && (
+            <>
+              <button className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10 p-2" onClick={(e) => { e.stopPropagation(); setZoomIndex(prev => (prev - 1 + allImages.length) % allImages.length); }}>
+                <ChevronLeft className="h-8 w-8" />
+              </button>
+              <button className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-white/80 z-10 p-2" onClick={(e) => { e.stopPropagation(); setZoomIndex(prev => (prev + 1) % allImages.length); }}>
+                <ChevronRight className="h-8 w-8" />
+              </button>
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm z-10">
+                {zoomIndex + 1} / {allImages.length}
+              </div>
+            </>
+          )}
           <img
-            src={block.content.url}
-            alt={block.content.alt || ""}
+            src={allImages[zoomIndex].url}
+            alt={allImages[zoomIndex].alt || ""}
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
