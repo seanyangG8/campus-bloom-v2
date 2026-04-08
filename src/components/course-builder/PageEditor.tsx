@@ -72,6 +72,10 @@ const iconMap: Record<BlockType, any> = {
   "qa-thread": MessageSquare,
   resource: FileText,
   divider: Minus,
+  "gap-fill": Type,
+  poll: HelpCircle,
+  reveal: ListOrdered,
+  "file-upload": FileText,
 };
 
 interface PageEditorProps {

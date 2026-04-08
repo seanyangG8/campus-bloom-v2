@@ -194,6 +194,10 @@ export function CourseBuilderProvider({ children, courseId }: { children: ReactN
       'qa-thread': 'Q&A Thread',
       'resource': 'Resource',
       'divider': 'Divider',
+      'gap-fill': 'Gap Fill',
+      'poll': 'Poll',
+      'reveal': 'Reveal',
+      'file-upload': 'File Upload',
     };
     
     const newBlock: Block = {
@@ -552,6 +556,42 @@ function getDefaultContent(type: BlockType): any {
       return { url: '', fileName: '', fileSize: '' };
     case 'divider':
       return { style: 'line' };
+    case 'gap-fill':
+      return {
+        instruction: 'Fill in the blanks:',
+        sentences: [{
+          id: generateId('s'),
+          textWithBlanks: 'The answer is {{1}}.',
+          blanks: [{ id: generateId('b'), acceptedAnswers: [''] }],
+        }],
+        showCorrectAfter: true,
+        scoringMode: 'partial-credit',
+      };
+    case 'poll':
+      return {
+        question: 'What do you think?',
+        options: ['Option A', 'Option B', 'Option C'],
+        allowMultiple: false,
+        showResults: true,
+        chartType: 'bar',
+      };
+    case 'reveal':
+      return {
+        sections: [
+          { id: generateId('r'), title: 'Section 1', content: '<p>Click to reveal this content.</p>' },
+          { id: generateId('r'), title: 'Section 2', content: '<p>More hidden content here.</p>' },
+        ],
+        style: 'accordion',
+        allowMultipleOpen: false,
+      };
+    case 'file-upload':
+      return {
+        prompt: 'Upload your work:',
+        allowedTypes: ['document', 'image'],
+        maxFileSize: 20,
+        maxFiles: 1,
+        mustSubmitToComplete: true,
+      };
     default:
       return {};
   }
