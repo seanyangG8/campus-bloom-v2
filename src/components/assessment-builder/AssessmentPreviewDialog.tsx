@@ -627,6 +627,8 @@ function LongAnswerPreview({
   onAnswer: (value: string) => void;
 }) {
   const wordCount = (answer || '').split(/\s+/).filter(Boolean).length;
+  const belowMin = content.minWords && wordCount > 0 && wordCount < content.minWords;
+  const aboveMax = content.maxWords && wordCount > content.maxWords;
 
   return (
     <div className="space-y-2">
@@ -637,7 +639,15 @@ function LongAnswerPreview({
         className="min-h-[120px] resize-none"
       />
       <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{wordCount} words</span>
+        <span className={cn(
+          belowMin && "text-destructive",
+          aboveMax && "text-destructive",
+          !belowMin && !aboveMax && wordCount > 0 && "text-success"
+        )}>
+          {wordCount} words
+          {belowMin && ` (min ${content.minWords} required)`}
+          {aboveMax && ` (max ${content.maxWords} exceeded)`}
+        </span>
         {(content.minWords || content.maxWords) && (
           <span>
             {content.minWords && `Min: ${content.minWords}`}
@@ -651,16 +661,48 @@ function LongAnswerPreview({
 }
 
 function FileUploadPreview({ content }: { content: FileUploadContent }) {
+  const [files, setFiles] = useState<File[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = Array.from(e.target.files || []);
+    setFiles(prev => [...prev, ...newFiles].slice(0, content.maxFiles));
+    if (e.target) e.target.value = '';
+  };
+
   return (
     <div className="space-y-4">
-      <div className="border-2 border-dashed rounded-lg p-8 text-center">
-        <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-        <p className="text-sm font-medium">Drop files here or click to upload</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Max {content.maxFileSize}MB • Up to {content.maxFiles} file(s)
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Allowed: {content.allowedTypes.join(', ')}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        multiple={content.maxFiles > 1}
+        onChange={handleFileChange}
+      />
+      <div
+        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => fileInputRef.current?.click()}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); setFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)].slice(0, content.maxFiles)); }}
+      >
+        {files.length > 0 ? (
+          <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+            {files.map((f, i) => (
+              <div key={i} className="flex items-center gap-2 justify-center text-sm">
+                <FileText className="h-4 w-4 text-primary" />
+                <span>{f.name}</span>
+                <span className="text-xs text-muted-foreground">({(f.size / 1024 / 1024).toFixed(1)}MB)</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+            <p className="text-sm font-medium">Drop files here or click to upload</p>
+          </>
+        )}
+        <p className="text-xs text-muted-foreground mt-2">
+          Max {content.maxFileSize}MB • Up to {content.maxFiles} file(s) • {content.allowedTypes.join(', ')}
         </p>
       </div>
       {content.instructions && (
