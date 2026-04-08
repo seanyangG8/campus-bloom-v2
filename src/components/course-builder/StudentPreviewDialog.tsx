@@ -424,15 +424,16 @@ function TextBlockPreview({ block }: { block: Block }) {
   );
 }
 
-// --- Video Block with actual embed + watch progress + chapters + time clipping ---
+// --- Video Block with notes panel + download ---
 function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: { 
   block: Block; progress?: BlockProgress; onMarkViewed: () => void; onUpdateProgress: (pct: number) => void;
 }) {
   const [watchPct, setWatchPct] = useState(progress?.watchedPercentage || 0);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [notes, setNotes] = useState('');
   const threshold = block.content?.watchThreshold || 80;
   
-  // Build embed URL with start/end time clipping
   const embed = useMemo(() => {
     const base = parseVideoEmbed(block.content?.url || '');
     if (!base) return null;
@@ -496,9 +497,13 @@ function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: 
           <Progress value={watchPct} className="h-1.5" />
         </div>
       )}
-      {block.content?.duration && (
-        <p className="text-xs text-muted-foreground">Duration: {block.content.duration}</p>
-      )}
+      <div className="flex items-center gap-3 flex-wrap">
+        {block.content?.duration && (
+          <p className="text-xs text-muted-foreground">Duration: {block.content.duration}</p>
+        )}
+        {/* Playback speed hint */}
+        <p className="text-xs text-muted-foreground">Speed: 0.5x · 1x · 1.5x · 2x (use player controls)</p>
+      </div>
       {/* Video chapters */}
       {chapters.length > 0 && (
         <div className="space-y-1">
@@ -515,16 +520,36 @@ function VideoBlockPreview({ block, progress, onMarkViewed, onUpdateProgress }: 
           </div>
         </div>
       )}
-      {block.content?.transcript && (
-        <div>
+      {/* Download button */}
+      {block.content?.allowDownload && block.content?.url && (
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => toast.success("Download started")}>
+          <Download className="h-3 w-3" /> Download Video
+        </Button>
+      )}
+      <div className="flex gap-2">
+        {block.content?.transcript && (
           <button onClick={() => setShowTranscript(!showTranscript)} className="text-xs text-primary hover:underline">
             {showTranscript ? 'Hide' : 'View'} Transcript
           </button>
-          {showTranscript && (
-            <div className="mt-2 p-3 bg-muted/50 rounded text-xs max-h-40 overflow-y-auto whitespace-pre-wrap">
-              {block.content.transcript}
-            </div>
-          )}
+        )}
+        <button onClick={() => setShowNotes(!showNotes)} className="text-xs text-primary hover:underline">
+          {showNotes ? 'Hide' : '📝 My'} Notes
+        </button>
+      </div>
+      {showTranscript && block.content?.transcript && (
+        <div className="p-3 bg-muted/50 rounded text-xs max-h-40 overflow-y-auto whitespace-pre-wrap">
+          {block.content.transcript}
+        </div>
+      )}
+      {showNotes && (
+        <div className="space-y-1">
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Take notes while watching..."
+            className="min-h-[80px] text-sm"
+          />
+          <p className="text-xs text-muted-foreground">Notes are saved locally for this session</p>
         </div>
       )}
     </div>
