@@ -691,6 +691,13 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
 
   return (
     <div className="space-y-4">
+      {/* Progress indicator */}
+      {questions.length > 1 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>Question {submitted ? questions.length : Math.min(Object.keys(answers).length + 1, questions.length)} of {questions.length}</span>
+          <span>{Object.keys(answers).length} answered</span>
+        </div>
+      )}
       {questionOrder.map((origIdx: number) => {
         const q = questions[origIdx];
         if (!q) return null;
