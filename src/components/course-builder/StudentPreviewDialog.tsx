@@ -1107,7 +1107,7 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
   );
 }
 
-// --- Whiteboard Block ---
+// --- Whiteboard Block with rubric display ---
 function WhiteboardBlockInteractive({ block, progress, onSubmit }: { 
   block: Block; progress?: BlockProgress; onSubmit: (data: any) => void;
 }) {
@@ -1128,6 +1128,13 @@ function WhiteboardBlockInteractive({ block, progress, onSubmit }: {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{block.content?.prompt || "Draw or write your answer"}</p>
+      {/* Rubric display */}
+      {block.content?.rubric && (
+        <details className="text-xs border rounded-lg p-2">
+          <summary className="cursor-pointer text-muted-foreground hover:text-primary font-medium">View Rubric / Marking Criteria</summary>
+          <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{block.content.rubric}</p>
+        </details>
+      )}
       <WhiteboardCanvas
         blockId={block.id}
         canvasSize={block.content?.canvasSize}
