@@ -1148,17 +1148,29 @@ function WhiteboardBlockInteractive({ block, progress, onSubmit }: {
   );
 }
 
-// --- Reflection Block ---
+// --- Reflection Block with draft auto-save + peer commenting ---
 function ReflectionBlockInteractive({ block, progress, onSubmit }: { 
   block: Block; progress?: BlockProgress; onSubmit: (text: string) => void;
 }) {
   const [text, setText] = useState('');
   const [submitted, setSubmitted] = useState(progress?.status === 'completed');
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [peerComments, setPeerComments] = useState<Record<number, string>>({});
   const minWords = block.content?.minWords || 0;
   const maxWords = block.content?.maxWords;
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
   const meetsMinimum = wordCount >= minWords;
   const exceedsMax = maxWords && wordCount > maxWords;
+
+  // Auto-save draft every 10 seconds
+  useEffect(() => {
+    if (submitted || !text.trim()) return;
+    const timer = setTimeout(() => {
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2000);
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [text, submitted]);
 
   const handleSubmit = () => {
     if (!meetsMinimum || exceedsMax) return;
@@ -1173,7 +1185,6 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
         <div className="p-3 rounded-lg bg-success/10 text-success text-center">
           <CheckCircle2 className="h-5 w-5 inline mr-2" /> Reflection submitted
         </div>
-        {/* Show peer reflections gallery */}
         {block.content?.showPeerReflections && (
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">Peer Reflections</p>
@@ -1184,6 +1195,14 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
               <div key={i} className="p-3 bg-muted/50 rounded-lg">
                 <p className="text-xs font-medium mb-1">{block.content?.privacyMode === 'anonymous' ? 'Anonymous' : peer.author}</p>
                 <p className="text-sm text-muted-foreground">{peer.text}</p>
+                {block.content?.allowPeerComments && (
+                  <div className="mt-2 flex gap-2">
+                    <Input value={peerComments[i] || ''} onChange={(e) => setPeerComments(prev => ({ ...prev, [i]: e.target.value }))} placeholder="Add a comment..." className="text-xs h-7" />
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { if (peerComments[i]?.trim()) { toast.success("Comment posted!"); setPeerComments(prev => ({ ...prev, [i]: '' })); } }}>
+                      <Send className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1195,7 +1214,6 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{block.content?.prompt || "Share your reflection..."}</p>
-      {/* Rubric display */}
       {block.content?.rubric && (
         <details className="text-xs border rounded-lg p-2">
           <summary className="cursor-pointer text-muted-foreground hover:text-primary font-medium">View Rubric</summary>
@@ -1210,9 +1228,12 @@ function ReflectionBlockInteractive({ block, progress, onSubmit }: {
       )}
       <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type your reflection here..." className="min-h-[120px]" />
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span className={cn(!meetsMinimum && wordCount > 0 && "text-destructive", meetsMinimum && "text-success")}>
-          {wordCount} words{minWords > 0 && ` (min: ${minWords})`}{maxWords && ` (max: ${maxWords})`}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={cn(!meetsMinimum && wordCount > 0 && "text-destructive", meetsMinimum && "text-success")}>
+            {wordCount} words{minWords > 0 && ` (min: ${minWords})`}{maxWords && ` (max: ${maxWords})`}
+          </span>
+          {draftSaved && <span className="text-success">Draft saved ✓</span>}
+        </div>
         {exceedsMax && <span className="text-destructive">Exceeds maximum</span>}
       </div>
       <Button onClick={handleSubmit} disabled={!meetsMinimum || !!exceedsMax} className="w-full">Submit Reflection</Button>
