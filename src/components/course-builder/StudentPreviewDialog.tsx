@@ -50,6 +50,7 @@ interface StudentPreviewDialogProps {
   courseTitle: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialPageId?: string;
 }
 
 // --- Helpers ---
@@ -80,7 +81,8 @@ export function StudentPreviewDialog({
   courseId, 
   courseTitle, 
   open, 
-  onOpenChange 
+  onOpenChange,
+  initialPageId,
 }: StudentPreviewDialogProps) {
   const { 
     getChaptersByCourse, 
@@ -111,7 +113,15 @@ export function StudentPreviewDialog({
 
   const currentPageData = allPages[currentPageIndex];
   const totalPages = allPages.length;
-  
+
+  // Jump to the page the author is editing when the preview opens
+  useEffect(() => {
+    if (!open || !initialPageId) return;
+    const idx = allPages.findIndex(p => p.page.id === initialPageId);
+    if (idx >= 0) setCurrentPageIndex(idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialPageId]);
+
   const isPageLocked = (index: number): boolean => {
     if (index === 0) return false;
     for (let i = 0; i < index; i++) {
