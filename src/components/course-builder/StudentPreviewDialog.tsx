@@ -1491,10 +1491,11 @@ function QAThreadBlockInteractive({ block, onMarkViewed, isComplete }: { block: 
 }
 
 // --- Gap Fill Block with inline rendering ---
-function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
+function GapFillBlockInteractive({ block, progress, onSubmit }: { block: Block; progress?: BlockProgress; onSubmit: (answers: Record<string, string>) => { score: number; passed: boolean; correctCount: number; totalBlanks: number } }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [results, setResults] = useState<Record<string, boolean>>({});
+  const [scoreInfo, setScoreInfo] = useState<{ score: number; passed: boolean } | null>(null);
 
   const sentences = block.content?.sentences || [];
   const allBlanks = sentences.flatMap((s: any) => s.blanks || []);
@@ -1504,14 +1505,16 @@ function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Blo
     allBlanks.forEach((blank: any) => {
       const userAnswer = (answers[blank.id] || '').trim();
       const caseSensitive = blank.caseSensitive || false;
-      const isCorrect = blank.acceptedAnswers?.some((a: string) => 
+      const isCorrect = blank.acceptedAnswers?.some((a: string) =>
         caseSensitive ? a.trim() === userAnswer : a.trim().toLowerCase() === userAnswer.toLowerCase()
       ) || false;
-      res[blank.id] = isCorrect;
+      res[blank.id] = isCorrect && userAnswer.length > 0;
     });
     setResults(res);
     setSubmitted(true);
-    onMarkViewed();
+    const result = onSubmit(answers);
+    setScoreInfo({ score: result.score, passed: result.passed });
+    result.passed ? toast.success(`Passed! ${result.correctCount}/${result.totalBlanks} correct`) : toast.error(`${result.correctCount}/${result.totalBlanks} correct`);
   };
 
   const handleRetry = () => {
@@ -1584,7 +1587,7 @@ function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Blo
 }
 
 // --- Poll Block with pie chart support ---
-function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
+function PollBlockInteractive({ block, progress, onSubmit }: { block: Block; progress?: BlockProgress; onSubmit: (choices: number[]) => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const [voted, setVoted] = useState(false);
   const [mockResults] = useState(() => {
@@ -1607,7 +1610,8 @@ function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block;
 
   const handleVote = () => {
     setVoted(true);
-    onMarkViewed();
+    onSubmit(selected);
+    toast.success("Vote recorded");
   };
 
   const totalVotes = mockResults.reduce((a: number, b: number) => a + b, 0) + (voted ? 1 : 0);
@@ -1705,6 +1709,7 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
 
   if (style === 'tabs') {
     const activeTab = openSections.size > 0 ? Array.from(openSections)[0] : sections[0]?.id;
+    const [viewedTabs, setViewedTabsLocal] = [openSections, setOpenSections] as const;
     return (
       <div className="space-y-3">
         <div className="flex gap-1 border-b">
@@ -1715,7 +1720,12 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
                 "px-3 py-2 text-sm font-medium border-b-2 transition-colors",
                 activeTab === s.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
-              onClick={() => { setOpenSections(new Set([s.id])); if (!isComplete && sections.length === 1) onMarkViewed(); }}
+              onClick={() => {
+                const next = new Set(viewedTabs);
+                next.add(s.id);
+                setViewedTabsLocal(next);
+                if (next.size >= sections.length && !isComplete) onMarkViewed();
+              }}
             >
               {s.title}
             </button>
@@ -1749,7 +1759,7 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
 }
 
 // --- File Upload Block with real file input ---
-function FileUploadBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
+function FileUploadBlockInteractive({ block, progress, onSubmit }: { block: Block; progress?: BlockProgress; onSubmit: (files: { name: string; size: number; type: string }[]) => void }) {
   const [files, setFiles] = useState<File[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -1779,7 +1789,7 @@ function FileUploadBlockInteractive({ block, progress, onMarkViewed }: { block: 
 
   const handleSubmit = () => {
     setSubmitted(true);
-    onMarkViewed();
+    onSubmit(files.map(f => ({ name: f.name, size: f.size, type: f.type })));
     toast.success('Files submitted successfully');
   };
 
