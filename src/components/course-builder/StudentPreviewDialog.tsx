@@ -1035,7 +1035,12 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{block.content?.instruction || "Drag and drop to reorder:"}</p>
       {distractors.length > 0 && <p className="text-xs text-muted-foreground italic">Note: Some items may not belong in the sequence.</p>}
-      <div className="space-y-2">
+      <Reorder.Group
+        axis="y"
+        values={userOrder}
+        onReorder={submitted ? () => {} : setUserOrder}
+        className="space-y-2"
+      >
         {userOrder.map((itemIndex, displayIndex) => {
           const item = allItems[itemIndex];
           const isCorrectPosition = submitted && !item.isDistractor && block.content?.correctOrder?.[displayIndex] === item.originalIndex;
@@ -1056,16 +1061,19 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
           };
 
           return (
-            <div
+            <Reorder.Item
               key={itemIndex}
-              draggable={!submitted}
-              onDragStart={() => handleDragStart(displayIndex)}
-              onDragOver={(e) => handleDragOver(e, displayIndex)}
-              onDragEnd={handleDragEnd}
+              value={itemIndex}
+              dragListener={!submitted}
+              whileDrag={{
+                scale: 1.03,
+                boxShadow: "0 20px 50px -15px rgba(0,0,0,0.25), 0 10px 20px -10px rgba(0,0,0,0.15)",
+                zIndex: 50,
+              }}
+              transition={{ type: "spring", stiffness: 400, damping: 28, mass: 0.8 }}
               className={cn(
-                "flex items-center gap-2 p-3 bg-muted/50 rounded border transition-all",
-                !submitted && "cursor-move hover:bg-muted",
-                draggedIndex === displayIndex && "opacity-50",
+                "flex items-center gap-2 p-3 bg-muted/50 rounded border",
+                !submitted && "cursor-grab active:cursor-grabbing hover:bg-muted",
                 isCorrectPosition && "border-success bg-success/10",
                 isWrongPosition && "border-destructive bg-destructive/10",
                 isDistractorRevealed && "border-amber-400 bg-amber-50 dark:bg-amber-950/20 opacity-60"
@@ -1074,13 +1082,12 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
               <span className="text-xs font-mono text-muted-foreground w-5 text-center">{displayIndex + 1}</span>
               <GripVertical className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm flex-1">{item.text}</span>
-              {/* Move buttons for touch/accessibility */}
               {!submitted && (
                 <div className="flex flex-col gap-0.5">
-                  <button onClick={moveUp} disabled={displayIndex === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5">
+                  <button onPointerDown={(e) => e.stopPropagation()} onClick={moveUp} disabled={displayIndex === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5">
                     <ChevronLeft className="h-3 w-3 rotate-90" />
                   </button>
-                  <button onClick={moveDown} disabled={displayIndex === userOrder.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5">
+                  <button onPointerDown={(e) => e.stopPropagation()} onClick={moveDown} disabled={displayIndex === userOrder.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-0.5">
                     <ChevronRight className="h-3 w-3 rotate-90" />
                   </button>
                 </div>
@@ -1088,10 +1095,10 @@ function ReorderBlockInteractive({ block, progress, onSubmit }: {
               {submitted && isCorrectPosition && <CheckCircle2 className="h-4 w-4 text-success shrink-0" />}
               {submitted && isWrongPosition && <X className="h-4 w-4 text-destructive shrink-0" />}
               {isDistractorRevealed && <span className="text-xs text-amber-600">Doesn't belong</span>}
-            </div>
+            </Reorder.Item>
           );
         })}
-      </div>
+      </Reorder.Group>
       {!submitted ? (
         <Button onClick={handleSubmit} className="w-full">Check Order</Button>
       ) : (
