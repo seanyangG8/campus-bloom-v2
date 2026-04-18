@@ -298,6 +298,9 @@ export function StudentPreviewDialog({
                           onSubmitReorder={(order) => submitReorderAttempt(block.id, order)}
                           onSubmitReflection={(text) => submitReflection(block.id, text)}
                           onSubmitWhiteboard={(data) => submitWhiteboardWork(block.id, data)}
+                          onSubmitGapFill={(answers) => submitGapFill(block.id, answers)}
+                          onSubmitFileUpload={(files) => submitFileUpload(block.id, files)}
+                          onSubmitPollVote={(choices) => submitPollVote(block.id, choices)}
                           onUpdateVideoProgress={(pct) => updateVideoProgress(block.id, pct)}
                         />
                       ))
