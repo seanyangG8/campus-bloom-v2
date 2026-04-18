@@ -55,9 +55,9 @@ export function CreateCourseDialog({ open, onOpenChange }: CreateCourseDialogPro
     setFormData({ title: "", description: "", subject: "", level: "" });
     onOpenChange(false);
 
-    // Navigate to the new course (using a mock ID)
+    // Navigate to course builder (demo: opens an existing course since data isn't persisted)
     setTimeout(() => {
-      navigate("/app/courses/new-course");
+      navigate("/app/courses/course-1");
     }, 500);
   };
 
