@@ -400,18 +400,21 @@ export function CourseBuilderProvider({ children, courseId }: { children: ReactN
     if (!block) return;
     
     const minWords = block.content?.minWords || 0;
+    const mustSubmit = block.content?.mustSubmitToComplete !== false; // default true
     const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
     const meetsMinimum = wordCount >= minWords;
+    // If submission is not required to complete, ANY submit completes; otherwise it must meet min words.
+    const isComplete = mustSubmit ? meetsMinimum : true;
     
     setStudentProgress(prev => {
       const newMap = new Map(prev);
       const existing = newMap.get(blockId);
       newMap.set(blockId, {
         blockId,
-        status: meetsMinimum ? 'completed' : 'in_progress',
+        status: isComplete ? 'completed' : 'in_progress',
         attempts: (existing?.attempts || 0) + 1,
         lastAttemptAt: new Date().toISOString(),
-        completedAt: meetsMinimum ? new Date().toISOString() : undefined,
+        completedAt: isComplete ? new Date().toISOString() : undefined,
         responses: { text, wordCount },
       });
       return newMap;
