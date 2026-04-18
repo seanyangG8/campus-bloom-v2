@@ -140,6 +140,7 @@ function CourseBuilder({ course }: { course: typeof demoCourses[0] }) {
         courseTitle={course.title}
         open={previewOpen}
         onOpenChange={setPreviewOpen}
+        initialPageId={selectedPageId ?? undefined}
       />
 
       {/* Publish Dialog */}
