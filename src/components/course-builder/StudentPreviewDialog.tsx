@@ -946,10 +946,22 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
       )}
       {submitted && (
         <div className="space-y-2">
-          <div className={cn("p-3 rounded-lg text-center", result?.passed ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
-            <p className="font-medium">{result?.passed ? "Passed!" : "Not passed"} - Score: {result?.score}%</p>
-            {maxAttempts > 0 && <p className="text-xs mt-1">Attempt {attemptCount} of {maxAttempts}</p>}
-          </div>
+          {(() => {
+            const completionRule = block.content?.completionRule || 'attempted';
+            const passMark = block.content?.passMark || 0;
+            const meetsScore = (result?.score ?? 0) >= passMark;
+            const isAttemptedOnly = completionRule === 'attempted';
+            const showSuccess = isAttemptedOnly ? true : meetsScore;
+            const label = isAttemptedOnly
+              ? `Submitted - Score: ${result?.score}%`
+              : `${meetsScore ? 'Passed!' : 'Not passed'} - Score: ${result?.score}% (pass mark: ${passMark}%)`;
+            return (
+              <div className={cn("p-3 rounded-lg text-center", showSuccess ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
+                <p className="font-medium">{label}</p>
+                {maxAttempts > 0 && <p className="text-xs mt-1">Attempt {attemptCount} of {maxAttempts}</p>}
+              </div>
+            );
+          })()}
           {canRetry && (
             <Button onClick={handleRetry} variant="outline" className="w-full gap-2">
               <RefreshCw className="h-4 w-4" /> Try Again
