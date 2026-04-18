@@ -1523,6 +1523,13 @@ function GapFillBlockInteractive({ block, progress, onSubmit }: { block: Block; 
     setSubmitted(false);
   };
 
+  const isDropdownMode = block.content?.mode === 'dropdown';
+
+  // Build a shuffled word bank from all accepted answers (first answer per blank only)
+  const wordBank = isDropdownMode
+    ? [...new Set(allBlanks.map((b: any) => (b.acceptedAnswers?.[0] || '').trim()).filter(Boolean))].sort(() => Math.random() - 0.5)
+    : [];
+
   // Render sentence with inline blanks
   const renderSentenceInline = (sentence: any) => {
     const text = sentence.textWithBlanks || '';
@@ -1538,21 +1545,42 @@ function GapFillBlockInteractive({ block, progress, onSubmit }: { block: Block; 
             blankCounter++;
             const blank = sentence.blanks?.[blankIndex];
             if (!blank) return <span key={pi}>___</span>;
+            const isCorrect = submitted && results[blank.id];
+            const isWrong = submitted && !results[blank.id];
             return (
               <span key={pi} className="inline-flex items-center gap-1">
-                <input
-                  value={answers[blank.id] || ''}
-                  onChange={(e) => setAnswers({ ...answers, [blank.id]: e.target.value })}
-                  disabled={submitted}
-                  className={cn(
-                    "inline-block w-28 h-7 px-2 text-sm border-b-2 bg-transparent outline-none text-center transition-colors",
-                    !submitted && "border-muted-foreground/30 focus:border-primary",
-                    submitted && results[blank.id] && "border-green-500 text-green-700 dark:text-green-400",
-                    submitted && !results[blank.id] && "border-red-500 text-red-700 dark:text-red-400"
-                  )}
-                  placeholder="..."
-                />
-                {submitted && !results[blank.id] && block.content?.showCorrectAfter && (
+                {isDropdownMode ? (
+                  <select
+                    value={answers[blank.id] || ''}
+                    onChange={(e) => setAnswers({ ...answers, [blank.id]: e.target.value })}
+                    disabled={submitted}
+                    className={cn(
+                      "inline-block h-7 px-2 text-sm border rounded bg-background outline-none transition-colors",
+                      !submitted && "border-muted-foreground/30 focus:border-primary",
+                      isCorrect && "border-green-500 text-green-700 dark:text-green-400",
+                      isWrong && "border-red-500 text-red-700 dark:text-red-400"
+                    )}
+                  >
+                    <option value="">Select…</option>
+                    {wordBank.map((w: string) => (
+                      <option key={w} value={w}>{w}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={answers[blank.id] || ''}
+                    onChange={(e) => setAnswers({ ...answers, [blank.id]: e.target.value })}
+                    disabled={submitted}
+                    className={cn(
+                      "inline-block w-28 h-7 px-2 text-sm border-b-2 bg-transparent outline-none text-center transition-colors",
+                      !submitted && "border-muted-foreground/30 focus:border-primary",
+                      isCorrect && "border-green-500 text-green-700 dark:text-green-400",
+                      isWrong && "border-red-500 text-red-700 dark:text-red-400"
+                    )}
+                    placeholder="..."
+                  />
+                )}
+                {isWrong && block.content?.showCorrectAfter !== false && (
                   <span className="text-xs text-muted-foreground">({blank.acceptedAnswers?.[0]})</span>
                 )}
               </span>
@@ -1688,6 +1716,7 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
   const sections = block.content?.sections || [];
   const style = block.content?.style || 'accordion';
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const [revealedSections, setRevealedSections] = useState<Set<string>>(new Set());
 
   const toggleSection = (id: string) => {
     setOpenSections(prev => {
@@ -1706,6 +1735,49 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
       return next;
     });
   };
+
+  // --- Click-to-Reveal style ---
+  if (style === 'click-to-reveal') {
+    const reveal = (id: string) => {
+      setRevealedSections(prev => {
+        const next = new Set(prev);
+        next.add(id);
+        if (next.size >= sections.length && !isComplete) onMarkViewed();
+        return next;
+      });
+    };
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        {sections.map((section: any) => {
+          const revealed = revealedSections.has(section.id);
+          return (
+            <div
+              key={section.id}
+              onClick={() => !revealed && reveal(section.id)}
+              className={cn(
+                "border rounded-lg p-4 min-h-[120px] transition-all cursor-pointer flex flex-col",
+                !revealed && "bg-muted/40 hover:bg-muted/70 items-center justify-center text-center",
+                revealed && "bg-card cursor-default"
+              )}
+            >
+              {!revealed ? (
+                <>
+                  <Eye className="h-5 w-5 text-muted-foreground mb-1" />
+                  <span className="text-sm font-medium">{section.title}</span>
+                  <span className="text-xs text-muted-foreground mt-1">Click to reveal</span>
+                </>
+              ) : (
+                <>
+                  <h4 className="text-sm font-semibold mb-2">{section.title}</h4>
+                  <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: section.content }} />
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   if (style === 'tabs') {
     const activeTab = openSections.size > 0 ? Array.from(openSections)[0] : sections[0]?.id;

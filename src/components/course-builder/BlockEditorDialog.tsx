@@ -46,6 +46,8 @@ export function BlockEditorDialog({ block, open, onOpenChange }: BlockEditorDial
     block?.visibilityCondition || 'always'
   );
   const [visibilityThreshold, setVisibilityThreshold] = useState<number | undefined>(block?.visibilityThreshold);
+  const [availabilityStart, setAvailabilityStart] = useState<string>(block?.availabilityStart || '');
+  const [availabilityEnd, setAvailabilityEnd] = useState<string>(block?.availabilityEnd || '');
 
   // Reset state when block changes
   useEffect(() => {
@@ -57,6 +59,8 @@ export function BlockEditorDialog({ block, open, onOpenChange }: BlockEditorDial
       setMaxAttempts(block.maxAttempts);
       setVisibilityCondition(block.visibilityCondition || 'always');
       setVisibilityThreshold(block.visibilityThreshold);
+      setAvailabilityStart(block.availabilityStart || '');
+      setAvailabilityEnd(block.availabilityEnd || '');
     }
   }, [block]);
 
@@ -70,6 +74,8 @@ export function BlockEditorDialog({ block, open, onOpenChange }: BlockEditorDial
         maxAttempts,
         visibilityCondition,
         visibilityThreshold,
+        availabilityStart: availabilityStart || undefined,
+        availabilityEnd: availabilityEnd || undefined,
       });
       onOpenChange(false);
     }
@@ -165,6 +171,10 @@ export function BlockEditorDialog({ block, open, onOpenChange }: BlockEditorDial
               setVisibilityCondition={setVisibilityCondition}
               visibilityThreshold={visibilityThreshold}
               setVisibilityThreshold={setVisibilityThreshold}
+              availabilityStart={availabilityStart}
+              setAvailabilityStart={setAvailabilityStart}
+              availabilityEnd={availabilityEnd}
+              setAvailabilityEnd={setAvailabilityEnd}
             />
           </TabsContent>
         </Tabs>
