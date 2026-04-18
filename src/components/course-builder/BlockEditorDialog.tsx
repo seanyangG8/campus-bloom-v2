@@ -26,6 +26,7 @@ import { Plus, Trash2, GripVertical, Info, AlertCircle, Lightbulb, CheckCircle2 
 import { useCourseBuilder } from "@/contexts/CourseBuilderContext";
 import { BlockSettingsPanel } from "./BlockSettingsPanel";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { RichMathEditor } from "@/components/ui/rich-math-editor";
 import { cn } from "@/lib/utils";
 
 interface BlockEditorDialogProps {
@@ -855,11 +856,11 @@ function MicroQuizEditor({ content, onChange }: { content: any; onChange: (c: an
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Model answer / rubric (shown to tutors)</Label>
-                <Textarea
+                <RichMathEditor
                   value={q.modelAnswer || ""}
-                  onChange={(e) => updateQuestion(qIndex, { modelAnswer: e.target.value })}
-                  placeholder="Describe the expected answer or grading criteria..."
-                  className="min-h-[60px] text-sm"
+                  onChange={(html) => updateQuestion(qIndex, { modelAnswer: html })}
+                  placeholder="Describe the expected answer or grading criteria... use the Σ button for math formulas"
+                  minHeight="120px"
                 />
               </div>
             </div>

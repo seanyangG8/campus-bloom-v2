@@ -831,6 +831,18 @@ function BlockPreview({ block, isAdmin }: { block: Block; isAdmin: boolean }) {
                     </div>
                   );
                 }
+                if (qType === 'long-answer') {
+                  const constraints = [
+                    q.minWords ? `min ${q.minWords} words` : null,
+                    q.maxWords ? `max ${q.maxWords} words` : null,
+                  ].filter(Boolean).join(' • ');
+                  return (
+                    <div className="p-3 border rounded-md bg-background text-sm text-muted-foreground italic space-y-1">
+                      <div>Rich text + math response (manual grading)</div>
+                      {constraints && <div className="text-xs not-italic">{constraints}</div>}
+                    </div>
+                  );
+                }
                 if (qType === 'true-false') {
                   return (
                     <div className="grid grid-cols-2 gap-2">
