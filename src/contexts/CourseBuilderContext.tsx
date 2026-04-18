@@ -424,7 +424,84 @@ export function CourseBuilderProvider({ children, courseId }: { children: ReactN
     });
   }, [blocks]);
 
-  const updateVideoProgress = useCallback((blockId: string, watchedPercentage: number) => {
+  // Gap-fill submission with proper scoring + pass-mark gating
+  const submitGapFill = useCallback((blockId: string, answers: Record<string, string>) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (!block) return { score: 0, passed: false, correctCount: 0, totalBlanks: 0 };
+
+    const sentences = block.content?.sentences || [];
+    const allBlanks = sentences.flatMap((s: any) => s.blanks || []);
+    const totalBlanks = allBlanks.length;
+    const passMark = block.content?.passMark ?? 70;
+    const scoringMode = block.content?.scoringMode || 'partial-credit';
+
+    let correctCount = 0;
+    allBlanks.forEach((blank: any) => {
+      const userAnswer = (answers[blank.id] || '').trim();
+      const caseSensitive = blank.caseSensitive || false;
+      const matches = (blank.acceptedAnswers || []).some((a: string) => {
+        const expected = (a || '').trim();
+        return caseSensitive ? expected === userAnswer : expected.toLowerCase() === userAnswer.toLowerCase();
+      });
+      if (matches && userAnswer.length > 0) correctCount++;
+    });
+
+    const score = totalBlanks > 0 ? Math.round((correctCount / totalBlanks) * 100) : 100;
+    const passed = scoringMode === 'all-or-nothing' ? correctCount === totalBlanks : score >= passMark;
+
+    setStudentProgress(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(blockId);
+      newMap.set(blockId, {
+        blockId,
+        status: passed ? 'completed' : 'in_progress',
+        attempts: (existing?.attempts || 0) + 1,
+        score,
+        maxScore: 100,
+        lastAttemptAt: new Date().toISOString(),
+        completedAt: passed ? new Date().toISOString() : undefined,
+        responses: answers,
+      });
+      return newMap;
+    });
+
+    return { score, passed, correctCount, totalBlanks };
+  }, [blocks]);
+
+  // File upload submission — completes when at least one file is submitted
+  const submitFileUpload = useCallback((blockId: string, files: { name: string; size: number; type: string }[]) => {
+    setStudentProgress(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(blockId);
+      newMap.set(blockId, {
+        blockId,
+        status: files.length > 0 ? 'completed' : 'in_progress',
+        attempts: (existing?.attempts || 0) + 1,
+        lastAttemptAt: new Date().toISOString(),
+        completedAt: files.length > 0 ? new Date().toISOString() : undefined,
+        responses: { files },
+      });
+      return newMap;
+    });
+  }, []);
+
+  // Poll vote — voting completes the block
+  const submitPollVote = useCallback((blockId: string, choices: number[]) => {
+    setStudentProgress(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(blockId);
+      newMap.set(blockId, {
+        blockId,
+        status: 'completed',
+        attempts: (existing?.attempts || 0) + 1,
+        lastAttemptAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        responses: { choices },
+      });
+      return newMap;
+    });
+  }, []);
+
     const block = blocks.find(b => b.id === blockId);
     if (!block) return;
     
