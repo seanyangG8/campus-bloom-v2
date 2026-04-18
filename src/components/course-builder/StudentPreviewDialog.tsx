@@ -347,11 +347,15 @@ interface InteractiveBlockProps {
   onSubmitReorder: (order: number[]) => { correct: boolean; score: number };
   onSubmitReflection: (text: string) => void;
   onSubmitWhiteboard: (data: any) => void;
+  onSubmitGapFill: (answers: Record<string, string>) => { score: number; passed: boolean; correctCount: number; totalBlanks: number };
+  onSubmitFileUpload: (files: { name: string; size: number; type: string }[]) => void;
+  onSubmitPollVote: (choices: number[]) => void;
   onUpdateVideoProgress: (pct: number) => void;
 }
 
 function InteractiveBlock({ 
-  block, progress, onMarkViewed, onSubmitQuiz, onSubmitReorder, onSubmitReflection, onSubmitWhiteboard, onUpdateVideoProgress,
+  block, progress, onMarkViewed, onSubmitQuiz, onSubmitReorder, onSubmitReflection, onSubmitWhiteboard,
+  onSubmitGapFill, onSubmitFileUpload, onSubmitPollVote, onUpdateVideoProgress,
 }: InteractiveBlockProps) {
   const rule = getBlockCompletionRule(block.type);
   const isComplete = progress?.status === 'completed';
@@ -389,10 +393,10 @@ function InteractiveBlock({
         {block.type === 'resource' && <ResourceBlockPreview block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
         {block.type === 'qa-thread' && <QAThreadBlockInteractive block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
         {block.type === 'divider' && <DividerBlockPreview block={block} />}
-        {block.type === 'gap-fill' && <GapFillBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
-        {block.type === 'poll' && <PollBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
+        {block.type === 'gap-fill' && <GapFillBlockInteractive block={block} progress={progress} onSubmit={onSubmitGapFill} />}
+        {block.type === 'poll' && <PollBlockInteractive block={block} progress={progress} onSubmit={onSubmitPollVote} />}
         {block.type === 'reveal' && <RevealBlockInteractive block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
-        {block.type === 'file-upload' && <FileUploadBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
+        {block.type === 'file-upload' && <FileUploadBlockInteractive block={block} progress={progress} onSubmit={onSubmitFileUpload} />}
       </div>
     </div>
   );
