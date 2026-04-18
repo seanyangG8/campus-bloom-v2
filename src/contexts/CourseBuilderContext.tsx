@@ -43,6 +43,9 @@ interface CourseBuilderContextType {
   submitReorderAttempt: (blockId: string, userOrder: number[]) => { correct: boolean; score: number };
   submitWhiteboardWork: (blockId: string, data: any) => void;
   submitReflection: (blockId: string, text: string) => void;
+  submitGapFill: (blockId: string, answers: Record<string, string>) => { score: number; passed: boolean; correctCount: number; totalBlanks: number };
+  submitFileUpload: (blockId: string, files: { name: string; size: number; type: string }[]) => void;
+  submitPollVote: (blockId: string, choices: number[]) => void;
   updateVideoProgress: (blockId: string, watchedPercentage: number) => void;
   getBlockProgress: (blockId: string) => BlockProgress | undefined;
   resetBlockProgress: (blockId: string) => void;
