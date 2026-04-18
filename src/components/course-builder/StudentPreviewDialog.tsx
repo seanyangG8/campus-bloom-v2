@@ -37,6 +37,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { RichMathEditor } from "@/components/ui/rich-math-editor";
 import { cn } from "@/lib/utils";
 import { useCourseBuilder } from "@/contexts/CourseBuilderContext";
 import { Chapter, Page, Block, BlockType } from "@/lib/demo-data";
