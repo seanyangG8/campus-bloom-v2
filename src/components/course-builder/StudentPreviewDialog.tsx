@@ -94,6 +94,9 @@ export function StudentPreviewDialog({
     submitReorderAttempt,
     submitReflection,
     submitWhiteboardWork,
+    submitGapFill,
+    submitFileUpload,
+    submitPollVote,
     updateVideoProgress,
     getBlockProgress,
   } = useCourseBuilder();
