@@ -520,52 +520,99 @@ export function useCourseBuilder() {
   return context;
 }
 
-// Helper to get default content for different block types
+// Helper to get default content for different block types — every default is complete so new blocks work without configuration.
 function getDefaultContent(type: BlockType): any {
   switch (type) {
     case 'text':
-      return { html: '<p>Enter your content here...</p>' };
+      return { html: '<p>Enter your content here...</p>', calloutStyle: 'none' };
     case 'video':
-      return { url: '', duration: '0:00' };
+      return { url: '', duration: '', watchThreshold: 80, chapters: [], allowDownload: false };
     case 'image':
-      return { url: '', alt: '', caption: '' };
+      return { url: '', alt: '', caption: '', displaySize: 'large', galleryMode: false, images: [] };
     case 'micro-quiz':
-      return { 
+      return {
         questions: [
           {
             id: generateId('q'),
+            type: 'single-choice',
             question: 'Enter your question here',
             options: ['Option A', 'Option B', 'Option C', 'Option D'],
             correctAnswer: 0,
-          }
-        ]
+            hint: '',
+            explanation: '',
+            points: 1,
+          },
+        ],
+        passMark: 70,
+        completionRule: 'attempted',
+        shuffleQuestions: false,
+        shuffleAnswers: false,
+        showCorrectAfterAttempt: true,
+        showOneAtATime: false,
+        timeLimit: 0,
       };
     case 'drag-drop-reorder':
       return {
         instruction: 'Drag and drop to reorder the steps:',
         items: ['Step 1', 'Step 2', 'Step 3'],
         correctOrder: [0, 1, 2],
+        scoringMode: 'all-or-nothing',
+        showCorrectOrderAfter: true,
+        distractorItems: [],
+        explanation: '',
       };
     case 'whiteboard':
-      return { prompt: 'Show your work here:', allowImage: true };
+      return {
+        prompt: 'Show your work here:',
+        canvasSize: 'a4',
+        background: 'blank',
+        enabledTools: { pen: true, highlighter: true, eraser: true, shapes: true, text: true, undo: true },
+        allowImage: true,
+        multiPage: false,
+        rubric: '',
+      };
     case 'reflection':
-      return { prompt: 'Reflect on what you learned:', minWords: 50 };
+      return {
+        prompt: 'Reflect on what you learned:',
+        minWords: 50,
+        privacyMode: 'private',
+        mustSubmitToComplete: true,
+        allowPeerComments: false,
+        exampleResponse: '',
+        rubric: '',
+      };
     case 'qa-thread':
-      return { allowAnonymous: true, questions: [] };
+      return {
+        whoCanPost: 'students-only',
+        anonymity: 'off',
+        allowAttachments: false,
+        moderationEnabled: true,
+        categories: [],
+      };
     case 'resource':
-      return { url: '', fileName: '', fileSize: '' };
+      return {
+        resourceType: 'file',
+        url: '',
+        fileName: '',
+        fileSize: '',
+        fileType: 'pdf',
+        mustOpenToComplete: false,
+        openInNewTab: true,
+      };
     case 'divider':
-      return { style: 'line' };
+      return { style: 'line', spacing: 'normal', anchorId: '' };
     case 'gap-fill':
       return {
         instruction: 'Fill in the blanks:',
         sentences: [{
           id: generateId('s'),
           textWithBlanks: 'The answer is {{1}}.',
-          blanks: [{ id: generateId('b'), acceptedAnswers: [''] }],
+          blanks: [{ id: generateId('b'), acceptedAnswers: [''], caseSensitive: false }],
         }],
         showCorrectAfter: true,
         scoringMode: 'partial-credit',
+        mode: 'text',
+        passMark: 70,
       };
     case 'poll':
       return {
@@ -574,6 +621,7 @@ function getDefaultContent(type: BlockType): any {
         allowMultiple: false,
         showResults: true,
         chartType: 'bar',
+        anonymousVoting: false,
       };
     case 'reveal':
       return {
@@ -591,6 +639,7 @@ function getDefaultContent(type: BlockType): any {
         maxFileSize: 20,
         maxFiles: 1,
         mustSubmitToComplete: true,
+        rubric: '',
       };
     default:
       return {};
