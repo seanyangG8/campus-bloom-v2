@@ -43,6 +43,9 @@ interface CourseBuilderContextType {
   submitReorderAttempt: (blockId: string, userOrder: number[]) => { correct: boolean; score: number };
   submitWhiteboardWork: (blockId: string, data: any) => void;
   submitReflection: (blockId: string, text: string) => void;
+  submitGapFill: (blockId: string, answers: Record<string, string>) => { score: number; passed: boolean; correctCount: number; totalBlanks: number };
+  submitFileUpload: (blockId: string, files: { name: string; size: number; type: string }[]) => void;
+  submitPollVote: (blockId: string, choices: number[]) => void;
   updateVideoProgress: (blockId: string, watchedPercentage: number) => void;
   getBlockProgress: (blockId: string) => BlockProgress | undefined;
   resetBlockProgress: (blockId: string) => void;
@@ -400,23 +403,104 @@ export function CourseBuilderProvider({ children, courseId }: { children: ReactN
     if (!block) return;
     
     const minWords = block.content?.minWords || 0;
+    const mustSubmit = block.content?.mustSubmitToComplete !== false; // default true
     const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
     const meetsMinimum = wordCount >= minWords;
+    // If submission is not required to complete, ANY submit completes; otherwise it must meet min words.
+    const isComplete = mustSubmit ? meetsMinimum : true;
     
     setStudentProgress(prev => {
       const newMap = new Map(prev);
       const existing = newMap.get(blockId);
       newMap.set(blockId, {
         blockId,
-        status: meetsMinimum ? 'completed' : 'in_progress',
+        status: isComplete ? 'completed' : 'in_progress',
         attempts: (existing?.attempts || 0) + 1,
         lastAttemptAt: new Date().toISOString(),
-        completedAt: meetsMinimum ? new Date().toISOString() : undefined,
+        completedAt: isComplete ? new Date().toISOString() : undefined,
         responses: { text, wordCount },
       });
       return newMap;
     });
   }, [blocks]);
+
+  // Gap-fill submission with proper scoring + pass-mark gating
+  const submitGapFill = useCallback((blockId: string, answers: Record<string, string>) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (!block) return { score: 0, passed: false, correctCount: 0, totalBlanks: 0 };
+
+    const sentences = block.content?.sentences || [];
+    const allBlanks = sentences.flatMap((s: any) => s.blanks || []);
+    const totalBlanks = allBlanks.length;
+    const passMark = block.content?.passMark ?? 70;
+    const scoringMode = block.content?.scoringMode || 'partial-credit';
+
+    let correctCount = 0;
+    allBlanks.forEach((blank: any) => {
+      const userAnswer = (answers[blank.id] || '').trim();
+      const caseSensitive = blank.caseSensitive || false;
+      const matches = (blank.acceptedAnswers || []).some((a: string) => {
+        const expected = (a || '').trim();
+        return caseSensitive ? expected === userAnswer : expected.toLowerCase() === userAnswer.toLowerCase();
+      });
+      if (matches && userAnswer.length > 0) correctCount++;
+    });
+
+    const score = totalBlanks > 0 ? Math.round((correctCount / totalBlanks) * 100) : 100;
+    const passed = scoringMode === 'all-or-nothing' ? correctCount === totalBlanks : score >= passMark;
+
+    setStudentProgress(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(blockId);
+      newMap.set(blockId, {
+        blockId,
+        status: passed ? 'completed' : 'in_progress',
+        attempts: (existing?.attempts || 0) + 1,
+        score,
+        maxScore: 100,
+        lastAttemptAt: new Date().toISOString(),
+        completedAt: passed ? new Date().toISOString() : undefined,
+        responses: answers,
+      });
+      return newMap;
+    });
+
+    return { score, passed, correctCount, totalBlanks };
+  }, [blocks]);
+
+  // File upload submission — completes when at least one file is submitted
+  const submitFileUpload = useCallback((blockId: string, files: { name: string; size: number; type: string }[]) => {
+    setStudentProgress(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(blockId);
+      newMap.set(blockId, {
+        blockId,
+        status: files.length > 0 ? 'completed' : 'in_progress',
+        attempts: (existing?.attempts || 0) + 1,
+        lastAttemptAt: new Date().toISOString(),
+        completedAt: files.length > 0 ? new Date().toISOString() : undefined,
+        responses: { files },
+      });
+      return newMap;
+    });
+  }, []);
+
+  // Poll vote — voting completes the block
+  const submitPollVote = useCallback((blockId: string, choices: number[]) => {
+    setStudentProgress(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(blockId);
+      newMap.set(blockId, {
+        blockId,
+        status: 'completed',
+        attempts: (existing?.attempts || 0) + 1,
+        lastAttemptAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        responses: { choices },
+      });
+      return newMap;
+    });
+  }, []);
 
   const updateVideoProgress = useCallback((blockId: string, watchedPercentage: number) => {
     const block = blocks.find(b => b.id === blockId);
@@ -499,6 +583,9 @@ export function CourseBuilderProvider({ children, courseId }: { children: ReactN
         submitReorderAttempt,
         submitWhiteboardWork,
         submitReflection,
+        submitGapFill,
+        submitFileUpload,
+        submitPollVote,
         updateVideoProgress,
         getBlockProgress,
         resetBlockProgress,
@@ -520,52 +607,99 @@ export function useCourseBuilder() {
   return context;
 }
 
-// Helper to get default content for different block types
+// Helper to get default content for different block types — every default is complete so new blocks work without configuration.
 function getDefaultContent(type: BlockType): any {
   switch (type) {
     case 'text':
-      return { html: '<p>Enter your content here...</p>' };
+      return { html: '<p>Enter your content here...</p>', calloutStyle: 'none' };
     case 'video':
-      return { url: '', duration: '0:00' };
+      return { url: '', duration: '', watchThreshold: 80, chapters: [], allowDownload: false };
     case 'image':
-      return { url: '', alt: '', caption: '' };
+      return { url: '', alt: '', caption: '', displaySize: 'large', galleryMode: false, images: [] };
     case 'micro-quiz':
-      return { 
+      return {
         questions: [
           {
             id: generateId('q'),
+            type: 'single-choice',
             question: 'Enter your question here',
             options: ['Option A', 'Option B', 'Option C', 'Option D'],
             correctAnswer: 0,
-          }
-        ]
+            hint: '',
+            explanation: '',
+            points: 1,
+          },
+        ],
+        passMark: 70,
+        completionRule: 'attempted',
+        shuffleQuestions: false,
+        shuffleAnswers: false,
+        showCorrectAfterAttempt: true,
+        showOneAtATime: false,
+        timeLimit: 0,
       };
     case 'drag-drop-reorder':
       return {
         instruction: 'Drag and drop to reorder the steps:',
         items: ['Step 1', 'Step 2', 'Step 3'],
         correctOrder: [0, 1, 2],
+        scoringMode: 'all-or-nothing',
+        showCorrectOrderAfter: true,
+        distractorItems: [],
+        explanation: '',
       };
     case 'whiteboard':
-      return { prompt: 'Show your work here:', allowImage: true };
+      return {
+        prompt: 'Show your work here:',
+        canvasSize: 'a4',
+        background: 'blank',
+        enabledTools: { pen: true, highlighter: true, eraser: true, shapes: true, text: true, undo: true },
+        allowImage: true,
+        multiPage: false,
+        rubric: '',
+      };
     case 'reflection':
-      return { prompt: 'Reflect on what you learned:', minWords: 50 };
+      return {
+        prompt: 'Reflect on what you learned:',
+        minWords: 50,
+        privacyMode: 'private',
+        mustSubmitToComplete: true,
+        allowPeerComments: false,
+        exampleResponse: '',
+        rubric: '',
+      };
     case 'qa-thread':
-      return { allowAnonymous: true, questions: [] };
+      return {
+        whoCanPost: 'students-only',
+        anonymity: 'off',
+        allowAttachments: false,
+        moderationEnabled: true,
+        categories: [],
+      };
     case 'resource':
-      return { url: '', fileName: '', fileSize: '' };
+      return {
+        resourceType: 'file',
+        url: '',
+        fileName: '',
+        fileSize: '',
+        fileType: 'pdf',
+        mustOpenToComplete: false,
+        openInNewTab: true,
+      };
     case 'divider':
-      return { style: 'line' };
+      return { style: 'line', spacing: 'normal', anchorId: '' };
     case 'gap-fill':
       return {
         instruction: 'Fill in the blanks:',
         sentences: [{
           id: generateId('s'),
           textWithBlanks: 'The answer is {{1}}.',
-          blanks: [{ id: generateId('b'), acceptedAnswers: [''] }],
+          blanks: [{ id: generateId('b'), acceptedAnswers: [''], caseSensitive: false }],
         }],
         showCorrectAfter: true,
         scoringMode: 'partial-credit',
+        mode: 'text',
+        passMark: 70,
       };
     case 'poll':
       return {
@@ -574,6 +708,7 @@ function getDefaultContent(type: BlockType): any {
         allowMultiple: false,
         showResults: true,
         chartType: 'bar',
+        anonymousVoting: false,
       };
     case 'reveal':
       return {
@@ -591,6 +726,7 @@ function getDefaultContent(type: BlockType): any {
         maxFileSize: 20,
         maxFiles: 1,
         mustSubmitToComplete: true,
+        rubric: '',
       };
     default:
       return {};

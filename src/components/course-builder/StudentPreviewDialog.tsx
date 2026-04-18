@@ -94,6 +94,9 @@ export function StudentPreviewDialog({
     submitReorderAttempt,
     submitReflection,
     submitWhiteboardWork,
+    submitGapFill,
+    submitFileUpload,
+    submitPollVote,
     updateVideoProgress,
     getBlockProgress,
   } = useCourseBuilder();
@@ -168,21 +171,30 @@ export function StudentPreviewDialog({
     ? Math.round((completedPages.size / totalPages) * 100) 
     : 0;
 
-  // Filter visible blocks based on visibility conditions
+  // Filter visible blocks based on visibility conditions.
+  // For "after_prev_complete", we look at the previous COUNTED block (skipping dividers/qa-thread which never complete).
   const getVisibleBlocks = (blocks: Block[]): Block[] => {
     return blocks.filter((block, idx) => {
       const vc = (block as any).visibilityCondition;
       if (!vc || vc === 'always') return true;
+
+      // Find the previous countable block
+      let prevCountable: Block | null = null;
+      for (let i = idx - 1; i >= 0; i--) {
+        const candidate = blocks[i];
+        if (getBlockCompletionRule(candidate.type).countsTowardsCompletion) {
+          prevCountable = candidate;
+          break;
+        }
+      }
+      if (!prevCountable) return true; // no countable predecessor → show
+
+      const prevProgress = getBlockProgress(prevCountable.id);
+
       if (vc === 'after prev_complete' || vc === 'after_prev_complete') {
-        if (idx === 0) return true;
-        const prevBlock = blocks[idx - 1];
-        const prevProgress = getBlockProgress(prevBlock.id);
         return prevProgress?.status === 'completed';
       }
       if (vc === 'score_threshold') {
-        if (idx === 0) return true;
-        const prevBlock = blocks[idx - 1];
-        const prevProgress = getBlockProgress(prevBlock.id);
         const threshold = (block as any).visibilityThreshold || 50;
         return (prevProgress?.score || 0) >= threshold;
       }
@@ -286,6 +298,9 @@ export function StudentPreviewDialog({
                           onSubmitReorder={(order) => submitReorderAttempt(block.id, order)}
                           onSubmitReflection={(text) => submitReflection(block.id, text)}
                           onSubmitWhiteboard={(data) => submitWhiteboardWork(block.id, data)}
+                          onSubmitGapFill={(answers) => submitGapFill(block.id, answers)}
+                          onSubmitFileUpload={(files) => submitFileUpload(block.id, files)}
+                          onSubmitPollVote={(choices) => submitPollVote(block.id, choices)}
                           onUpdateVideoProgress={(pct) => updateVideoProgress(block.id, pct)}
                         />
                       ))
@@ -332,11 +347,15 @@ interface InteractiveBlockProps {
   onSubmitReorder: (order: number[]) => { correct: boolean; score: number };
   onSubmitReflection: (text: string) => void;
   onSubmitWhiteboard: (data: any) => void;
+  onSubmitGapFill: (answers: Record<string, string>) => { score: number; passed: boolean; correctCount: number; totalBlanks: number };
+  onSubmitFileUpload: (files: { name: string; size: number; type: string }[]) => void;
+  onSubmitPollVote: (choices: number[]) => void;
   onUpdateVideoProgress: (pct: number) => void;
 }
 
 function InteractiveBlock({ 
-  block, progress, onMarkViewed, onSubmitQuiz, onSubmitReorder, onSubmitReflection, onSubmitWhiteboard, onUpdateVideoProgress,
+  block, progress, onMarkViewed, onSubmitQuiz, onSubmitReorder, onSubmitReflection, onSubmitWhiteboard,
+  onSubmitGapFill, onSubmitFileUpload, onSubmitPollVote, onUpdateVideoProgress,
 }: InteractiveBlockProps) {
   const rule = getBlockCompletionRule(block.type);
   const isComplete = progress?.status === 'completed';
@@ -374,10 +393,10 @@ function InteractiveBlock({
         {block.type === 'resource' && <ResourceBlockPreview block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
         {block.type === 'qa-thread' && <QAThreadBlockInteractive block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
         {block.type === 'divider' && <DividerBlockPreview block={block} />}
-        {block.type === 'gap-fill' && <GapFillBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
-        {block.type === 'poll' && <PollBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
+        {block.type === 'gap-fill' && <GapFillBlockInteractive block={block} progress={progress} onSubmit={onSubmitGapFill} />}
+        {block.type === 'poll' && <PollBlockInteractive block={block} progress={progress} onSubmit={onSubmitPollVote} />}
         {block.type === 'reveal' && <RevealBlockInteractive block={block} onMarkViewed={onMarkViewed} isComplete={isComplete} />}
-        {block.type === 'file-upload' && <FileUploadBlockInteractive block={block} progress={progress} onMarkViewed={onMarkViewed} />}
+        {block.type === 'file-upload' && <FileUploadBlockInteractive block={block} progress={progress} onSubmit={onSubmitFileUpload} />}
       </div>
     </div>
   );
@@ -1472,10 +1491,11 @@ function QAThreadBlockInteractive({ block, onMarkViewed, isComplete }: { block: 
 }
 
 // --- Gap Fill Block with inline rendering ---
-function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
+function GapFillBlockInteractive({ block, progress, onSubmit }: { block: Block; progress?: BlockProgress; onSubmit: (answers: Record<string, string>) => { score: number; passed: boolean; correctCount: number; totalBlanks: number } }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [results, setResults] = useState<Record<string, boolean>>({});
+  const [scoreInfo, setScoreInfo] = useState<{ score: number; passed: boolean } | null>(null);
 
   const sentences = block.content?.sentences || [];
   const allBlanks = sentences.flatMap((s: any) => s.blanks || []);
@@ -1485,14 +1505,16 @@ function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Blo
     allBlanks.forEach((blank: any) => {
       const userAnswer = (answers[blank.id] || '').trim();
       const caseSensitive = blank.caseSensitive || false;
-      const isCorrect = blank.acceptedAnswers?.some((a: string) => 
+      const isCorrect = blank.acceptedAnswers?.some((a: string) =>
         caseSensitive ? a.trim() === userAnswer : a.trim().toLowerCase() === userAnswer.toLowerCase()
       ) || false;
-      res[blank.id] = isCorrect;
+      res[blank.id] = isCorrect && userAnswer.length > 0;
     });
     setResults(res);
     setSubmitted(true);
-    onMarkViewed();
+    const result = onSubmit(answers);
+    setScoreInfo({ score: result.score, passed: result.passed });
+    result.passed ? toast.success(`Passed! ${result.correctCount}/${result.totalBlanks} correct`) : toast.error(`${result.correctCount}/${result.totalBlanks} correct`);
   };
 
   const handleRetry = () => {
@@ -1565,7 +1587,7 @@ function GapFillBlockInteractive({ block, progress, onMarkViewed }: { block: Blo
 }
 
 // --- Poll Block with pie chart support ---
-function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
+function PollBlockInteractive({ block, progress, onSubmit }: { block: Block; progress?: BlockProgress; onSubmit: (choices: number[]) => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const [voted, setVoted] = useState(false);
   const [mockResults] = useState(() => {
@@ -1588,7 +1610,8 @@ function PollBlockInteractive({ block, progress, onMarkViewed }: { block: Block;
 
   const handleVote = () => {
     setVoted(true);
-    onMarkViewed();
+    onSubmit(selected);
+    toast.success("Vote recorded");
   };
 
   const totalVotes = mockResults.reduce((a: number, b: number) => a + b, 0) + (voted ? 1 : 0);
@@ -1686,6 +1709,7 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
 
   if (style === 'tabs') {
     const activeTab = openSections.size > 0 ? Array.from(openSections)[0] : sections[0]?.id;
+    const [viewedTabs, setViewedTabsLocal] = [openSections, setOpenSections] as const;
     return (
       <div className="space-y-3">
         <div className="flex gap-1 border-b">
@@ -1696,7 +1720,12 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
                 "px-3 py-2 text-sm font-medium border-b-2 transition-colors",
                 activeTab === s.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
-              onClick={() => { setOpenSections(new Set([s.id])); if (!isComplete && sections.length === 1) onMarkViewed(); }}
+              onClick={() => {
+                const next = new Set(viewedTabs);
+                next.add(s.id);
+                setViewedTabsLocal(next);
+                if (next.size >= sections.length && !isComplete) onMarkViewed();
+              }}
             >
               {s.title}
             </button>
@@ -1730,7 +1759,7 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
 }
 
 // --- File Upload Block with real file input ---
-function FileUploadBlockInteractive({ block, progress, onMarkViewed }: { block: Block; progress?: BlockProgress; onMarkViewed: () => void }) {
+function FileUploadBlockInteractive({ block, progress, onSubmit }: { block: Block; progress?: BlockProgress; onSubmit: (files: { name: string; size: number; type: string }[]) => void }) {
   const [files, setFiles] = useState<File[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -1760,7 +1789,7 @@ function FileUploadBlockInteractive({ block, progress, onMarkViewed }: { block: 
 
   const handleSubmit = () => {
     setSubmitted(true);
-    onMarkViewed();
+    onSubmit(files.map(f => ({ name: f.name, size: f.size, type: f.type })));
     toast.success('Files submitted successfully');
   };
 
