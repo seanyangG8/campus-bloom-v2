@@ -502,6 +502,7 @@ export function CourseBuilderProvider({ children, courseId }: { children: ReactN
     });
   }, []);
 
+  const updateVideoProgress = useCallback((blockId: string, watchedPercentage: number) => {
     const block = blocks.find(b => b.id === blockId);
     if (!block) return;
     
