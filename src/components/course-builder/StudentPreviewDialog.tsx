@@ -1716,9 +1716,19 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
   const sections = block.content?.sections || [];
   const style = block.content?.style || 'accordion';
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const [viewedSections, setViewedSections] = useState<Set<string>>(new Set());
   const [revealedSections, setRevealedSections] = useState<Set<string>>(new Set());
 
   const toggleSection = (id: string) => {
+    // Track view independently of open state so single-open accordions still
+    // mark complete after all sections have been opened at least once.
+    setViewedSections(prev => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      if (next.size >= sections.length && !isComplete) onMarkViewed();
+      return next;
+    });
     setOpenSections(prev => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -1728,9 +1738,6 @@ function RevealBlockInteractive({ block, onMarkViewed, isComplete }: { block: Bl
           next.clear();
         }
         next.add(id);
-      }
-      if (next.size === sections.length && !isComplete) {
-        onMarkViewed();
       }
       return next;
     });
