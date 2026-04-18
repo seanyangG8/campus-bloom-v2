@@ -887,6 +887,41 @@ function QuizBlockInteractive({ block, progress, onSubmit }: {
           </div>
         )}
 
+        {/* Long Answer (rich text + math, manual grading) */}
+        {q.type === 'long-answer' && (() => {
+          const html = (userAnswer as string) || '';
+          const wordCount = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean).length;
+          const minWords = q.minWords || 0;
+          const maxWords = q.maxWords || 0;
+          const exceedsMax = maxWords > 0 && wordCount > maxWords;
+          return (
+            <div className="space-y-2">
+              {submitted ? (
+                <div className="p-3 border rounded-md bg-background prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: html || '<em class="text-muted-foreground">No answer submitted</em>' }} />
+              ) : (
+                <RichMathEditor
+                  value={html}
+                  onChange={(val) => handleAnswerChange(q.id, val)}
+                  minHeight="160px"
+                  placeholder="Write your answer... use the toolbar for formatting and the Σ button for math"
+                />
+              )}
+              <div className="flex items-center justify-between text-xs">
+                <span className={cn("text-muted-foreground", exceedsMax && "text-destructive")}>
+                  {wordCount} word{wordCount === 1 ? '' : 's'}
+                  {minWords > 0 && ` (min ${minWords})`}
+                  {maxWords > 0 && ` (max ${maxWords})`}
+                </span>
+                {submitted && (
+                  <span className="flex items-center gap-1 text-primary">
+                    <Send className="h-3 w-3" /> Sent for tutor review
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         {q.hint && !submitted && (
           <button onClick={() => toggleHint(q.id)} className="mt-2 text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
             <Lightbulb className="h-3 w-3" /> {showHints.has(q.id) ? 'Hide hint' : 'Show hint'}
