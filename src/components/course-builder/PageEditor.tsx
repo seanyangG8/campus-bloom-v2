@@ -518,6 +518,9 @@ function DraggableBlockCard({
     "whiteboard",
     "reflection",
     "qa-thread",
+    "gap-fill",
+    "poll",
+    "file-upload",
   ].includes(block.type);
 
   const currentIndex = blocks.findIndex((b) => b.id === block.id);
