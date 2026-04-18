@@ -192,6 +192,10 @@ export function checkQuizPassed(
       } else {
         if (userText.toLowerCase() === expectedText.toLowerCase()) correct++;
       }
+    } else if (q.type === 'long-answer') {
+      // Manually graded — count as correct for auto-progress if any answer submitted
+      const userText = typeof userAnswer === 'string' ? userAnswer.replace(/<[^>]*>/g, '').trim() : '';
+      if (userText.length > 0) correct++;
     } else {
       // For single choice, true/false - compare as numbers
       const userNum = typeof userAnswer === 'number' ? userAnswer : parseInt(String(userAnswer), 10);

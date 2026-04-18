@@ -680,6 +680,7 @@ function MicroQuizEditor({ content, onChange }: { content: any; onChange: (c: an
                   <SelectItem value="multi-select">Multi-Select</SelectItem>
                   <SelectItem value="true-false">True/False</SelectItem>
                   <SelectItem value="short-answer">Short Answer</SelectItem>
+                  <SelectItem value="long-answer">Long Answer (rich text + math)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -821,6 +822,46 @@ function MicroQuizEditor({ content, onChange }: { content: any; onChange: (c: an
               <p className="text-xs text-muted-foreground">
                 {q.caseSensitive ? "Exact match required" : "Case insensitive matching"}
               </p>
+            </div>
+          )}
+
+          {q.type === 'long-answer' && (
+            <div className="space-y-2 p-3 rounded-md bg-muted/40 border">
+              <p className="text-sm font-medium">Long Answer (manual grading)</p>
+              <p className="text-xs text-muted-foreground">
+                Students get a rich-text editor with formatting and LaTeX math formulas. Submissions are sent to a tutor for grading.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Min words (optional)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={q.minWords || ""}
+                    onChange={(e) => updateQuestion(qIndex, { minWords: parseInt(e.target.value) || 0 })}
+                    placeholder="e.g., 50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Max words (optional)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={q.maxWords || ""}
+                    onChange={(e) => updateQuestion(qIndex, { maxWords: parseInt(e.target.value) || 0 })}
+                    placeholder="e.g., 500"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Model answer / rubric (shown to tutors)</Label>
+                <Textarea
+                  value={q.modelAnswer || ""}
+                  onChange={(e) => updateQuestion(qIndex, { modelAnswer: e.target.value })}
+                  placeholder="Describe the expected answer or grading criteria..."
+                  className="min-h-[60px] text-sm"
+                />
+              </div>
             </div>
           )}
 
