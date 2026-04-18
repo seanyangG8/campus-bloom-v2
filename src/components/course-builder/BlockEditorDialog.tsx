@@ -680,6 +680,7 @@ function MicroQuizEditor({ content, onChange }: { content: any; onChange: (c: an
                   <SelectItem value="multi-select">Multi-Select</SelectItem>
                   <SelectItem value="true-false">True/False</SelectItem>
                   <SelectItem value="short-answer">Short Answer</SelectItem>
+                  <SelectItem value="long-answer">Long Answer (rich text + math)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
