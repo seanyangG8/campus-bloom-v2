@@ -821,13 +821,34 @@ function BlockPreview({ block, isAdmin }: { block: Block; isAdmin: boolean }) {
                 </div>
                 Q1: {block.content.questions[0].question || "Enter question..."}
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {block.content.questions[0].options?.map((opt: string, i: number) => (
-                  <Button key={i} variant="outline" size="sm" className="justify-start">
-                    {String.fromCharCode(65 + i)}) {opt || `Option ${i + 1}`}
-                  </Button>
-                ))}
-              </div>
+              {(() => {
+                const q = block.content.questions[0];
+                const qType = q.type || 'single-choice';
+                if (qType === 'short-answer') {
+                  return (
+                    <div className="p-2 border rounded-md bg-background text-sm text-muted-foreground italic">
+                      {q.expectedAnswer ? `Expected: ${q.expectedAnswer}` : 'Short answer response...'}
+                    </div>
+                  );
+                }
+                if (qType === 'true-false') {
+                  return (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="outline" size="sm" className="justify-start">True</Button>
+                      <Button variant="outline" size="sm" className="justify-start">False</Button>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="grid grid-cols-2 gap-2">
+                    {q.options?.map((opt: string, i: number) => (
+                      <Button key={i} variant="outline" size="sm" className="justify-start">
+                        {String.fromCharCode(65 + i)}) {opt || `Option ${i + 1}`}
+                      </Button>
+                    ))}
+                  </div>
+                );
+              })()}
               {block.content.questions.length > 1 && (
                 <p className="text-xs text-muted-foreground">
                   +{block.content.questions.length - 1} more questions
