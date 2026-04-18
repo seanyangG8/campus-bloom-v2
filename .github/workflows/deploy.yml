@@ -31,7 +31,7 @@ jobs:
         env:
           # IMPORTANT: replace "your-repo-name" with the actual GitHub repo name.
           # Must start AND end with a slash, e.g. "/my-app/".
-          BASE_PATH: /campus-ace-learn/
+          BASE_PATH: /campus-bloom-v2/
         run: npm run build
 
       - uses: actions/configure-pages@v5
