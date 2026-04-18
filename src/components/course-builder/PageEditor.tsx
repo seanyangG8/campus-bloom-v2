@@ -86,7 +86,7 @@ interface PageEditorProps {
 }
 
 export function PageEditor({ pageId, isAdmin }: PageEditorProps) {
-  const { pages, getBlocksByPage, updatePage, addBlock } = useCourseBuilder();
+  const { pages, getBlocksByPage, updatePage, addBlock, studentProgress } = useCourseBuilder();
   const page = pages.find((p) => p.id === pageId);
   const blocks = getBlocksByPage(pageId);
 
@@ -98,7 +98,13 @@ export function PageEditor({ pageId, isAdmin }: PageEditorProps) {
 
   if (!page) return null;
 
-  const completedBlocks = blocks.filter((b) => b.isCompleted).length;
+  // Use live studentProgress map (not stale block.isCompleted flag) so the
+  // student footer reflects real-time completion as blocks are interacted with.
+  const countableBlocks = blocks.filter((b) => b.type !== 'divider' && b.type !== 'qa-thread');
+  const completedBlocks = countableBlocks.filter((b) => {
+    const p = studentProgress.get(b.id);
+    return p?.status === 'completed' || b.isCompleted;
+  }).length;
   const requiredBlocks = blocks.filter((b) => b.isRequired).length;
 
   // Check if drag is from library
@@ -182,12 +188,12 @@ export function PageEditor({ pageId, isAdmin }: PageEditorProps) {
                 <div
                   className="h-full bg-accent rounded-full transition-all"
                   style={{
-                    width: blocks.length > 0 ? `${(completedBlocks / blocks.length) * 100}%` : "0%",
+                    width: countableBlocks.length > 0 ? `${(completedBlocks / countableBlocks.length) * 100}%` : "0%",
                   }}
                 />
               </div>
               <span className="text-sm text-muted-foreground">
-                {completedBlocks} of {blocks.length} blocks complete
+                {completedBlocks} of {countableBlocks.length} blocks complete
               </span>
             </div>
             <Button
