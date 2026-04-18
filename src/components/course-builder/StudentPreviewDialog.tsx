@@ -171,21 +171,30 @@ export function StudentPreviewDialog({
     ? Math.round((completedPages.size / totalPages) * 100) 
     : 0;
 
-  // Filter visible blocks based on visibility conditions
+  // Filter visible blocks based on visibility conditions.
+  // For "after_prev_complete", we look at the previous COUNTED block (skipping dividers/qa-thread which never complete).
   const getVisibleBlocks = (blocks: Block[]): Block[] => {
     return blocks.filter((block, idx) => {
       const vc = (block as any).visibilityCondition;
       if (!vc || vc === 'always') return true;
+
+      // Find the previous countable block
+      let prevCountable: Block | null = null;
+      for (let i = idx - 1; i >= 0; i--) {
+        const candidate = blocks[i];
+        if (getBlockCompletionRule(candidate.type).countsTowardsCompletion) {
+          prevCountable = candidate;
+          break;
+        }
+      }
+      if (!prevCountable) return true; // no countable predecessor → show
+
+      const prevProgress = getBlockProgress(prevCountable.id);
+
       if (vc === 'after prev_complete' || vc === 'after_prev_complete') {
-        if (idx === 0) return true;
-        const prevBlock = blocks[idx - 1];
-        const prevProgress = getBlockProgress(prevBlock.id);
         return prevProgress?.status === 'completed';
       }
       if (vc === 'score_threshold') {
-        if (idx === 0) return true;
-        const prevBlock = blocks[idx - 1];
-        const prevProgress = getBlockProgress(prevBlock.id);
         const threshold = (block as any).visibilityThreshold || 50;
         return (prevProgress?.score || 0) >= threshold;
       }
